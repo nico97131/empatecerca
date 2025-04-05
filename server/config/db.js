@@ -1,15 +1,18 @@
-import mongoose from 'mongoose';
+import mysql from 'mysql2/promise';
+import dotenv from 'dotenv';
 
-export const connectDB = async () => {
-  try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
-  } catch (error) {
-    console.error(`Error: ${error.message}`);
-    process.exit(1);
-  }
-};
+dotenv.config();
+
+const db = mysql.createPool({
+  host: process.env.MYSQL_HOST || 'localhost',
+  user: process.env.MYSQL_USER || 'root',
+  password: process.env.MYSQL_PASSWORD || '13072130',
+  database: process.env.MYSQL_DB || 'fundacion_empate',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
+
+// Mensaje de éxito (sin acceder a propiedades internas no garantizadas)
+console.log('✅ MySQL Pool conectado con éxito');
+export default db;

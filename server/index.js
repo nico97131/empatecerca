@@ -1,7 +1,9 @@
+// index.js o index.ts si estás usando TypeScript
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import db from './config/db.js';
 
 // Import routes
 import authRoutes from './routes/auth.routes.js';
@@ -14,53 +16,64 @@ import messageRoutes from './routes/message.routes.js';
 
 // Load environment variables
 dotenv.config();
+console.log('🔐 PORT cargado desde .env:', process.env.PORT);
 
-// Initialize express
-const app = express();
+const startServer = async () => {
+  // Verificar conexión con MySQL
+  try {
+    await db.getConnection();
+    console.log('✅ Conexión exitosa a MySQL');
+  } catch (err) {
+    console.error('❌ Error al conectar a MySQL:', err.message);
+    process.exit(1); // Detener el servidor si no hay conexión
+  }
 
-// Middleware
-app.use(cors({
-  origin: 'http://localhost:3000',
-  credentials: true
-}));
-app.use(morgan('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+  // Initialize express
+  const app = express();
 
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/volunteers', volunteerRoutes);
-app.use('/api/disciplines', disciplineRoutes);
-app.use('/api/groups', groupRoutes);
-app.use('/api/progress', progressRoutes);
-app.use('/api/messages', messageRoutes);
+  // Middleware
+  app.use(cors({
+    origin: 'http://localhost:3000',
+    credentials: true
+  }));
+  app.use(morgan('dev'));
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
 
-// Base route for API
-app.get('/', (req, res) => {
-  res.json({ message: 'Welcome to EmpateCerca API' });
-});
+  // API Routes
+  app.use('/api/auth', authRoutes);
+  app.use('/api/users', userRoutes);
+  app.use('/api/volunteers', volunteerRoutes);
+  app.use('/api/disciplines', disciplineRoutes);
+  app.use('/api/groups', groupRoutes);
+  app.use('/api/progress', progressRoutes);
+  app.use('/api/messages', messageRoutes);
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    success: false,
-    message: 'Error interno del servidor',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  app.get('/', (req, res) => {
+    res.json({ message: 'Welcome to EmpateCerca API' });
   });
-});
 
-// Handle 404 routes
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Ruta no encontrada'
+  app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Error interno del servidor',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   });
-});
 
-const PORT = process.env.PORT || 5000;
+  app.use((req, res) => {
+    res.status(404).json({
+      success: false,
+      message: 'Ruta no encontrada'
+    });
+  });
 
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en el puerto ${PORT}`);
-});
+  const PORT = process.env.PORT || 5001;
+  app.listen(PORT, () => {
+    console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+  });
+};
+
+// Ejecutar función principal
+startServer();

@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Search, Edit2, Trash2, Calendar, Mail } from 'lucide-react';
 import VolunteerForm from './VolunteerForm';
 import ScheduleModal from './ScheduleModal';
+import axios from 'axios';
 import { mockVolunteers } from '../../../data/mockVolunteers';
-import { mockDisciplines } from '../../../data/mockDisciplines';
 
 interface Volunteer {
   id: number;
@@ -17,20 +17,51 @@ interface Volunteer {
   activeGroups: number;
   status: 'active' | 'inactive';
   inactiveReason?: 'psicotecnico' | 'antecedentes_penales';
+  specialization?: string; // Para mapear con disciplina si existiera
+}
+
+interface Discipline {
+  id: number;
+  name: string;
+  category: string;
+  description: string;
 }
 
 export default function VolunteersManagement() {
-  const [volunteers, setVolunteers] = useState<Volunteer[]>(
-    mockVolunteers.map(volunteer => ({
-      ...volunteer,
-      discipline: mockDisciplines.find(d => d.category === volunteer.specialization)?.name || 'Sin asignar',
-      birthDate: volunteer.joinDate // Using joinDate as birthDate for mock data
-    }))
-  );
+  const [disciplines, setDisciplines] = useState<Discipline[]>([]);
+  const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVolunteer, setSelectedVolunteer] = useState<Volunteer | null>(null);
+
+  useEffect(() => {
+    // 🚀 Traer disciplinas reales desde MySQL
+    const fetchDisciplines = async () => {
+      try {
+        const res = await axios.get('http://localhost:5000/api/disciplines');
+        setDisciplines(res.data.data);
+      } catch (error) {
+        console.error('Error al obtener disciplinas:', error);
+      }
+    };
+
+    fetchDisciplines();
+  }, []);
+
+  useEffect(() => {
+    // Mapear mockVolunteers con disciplinas reales por categoría
+    const mapped = mockVolunteers.map((volunteer) => {
+      const matched = disciplines.find(d => d.category === volunteer.specialization);
+      return {
+        ...volunteer,
+        discipline: matched?.name || 'Sin asignar',
+        birthDate: volunteer.joinDate // si usás joinDate como mock
+      };
+    });
+
+    setVolunteers(mapped);
+  }, [disciplines]);
 
   const handleAddVolunteer = (newVolunteer: Omit<Volunteer, 'id'>) => {
     setVolunteers([...volunteers, { ...newVolunteer, id: volunteers.length + 1 }]);
@@ -38,15 +69,15 @@ export default function VolunteersManagement() {
   };
 
   const handleEditVolunteer = (updatedVolunteer: Volunteer) => {
-    setVolunteers(volunteers.map(volunteer => 
-      volunteer.id === updatedVolunteer.id ? updatedVolunteer : volunteer
+    setVolunteers(volunteers.map(v =>
+      v.id === updatedVolunteer.id ? updatedVolunteer : v
     ));
     setSelectedVolunteer(null);
     setShowForm(false);
   };
 
   const handleDeleteVolunteer = (id: number) => {
-    setVolunteers(volunteers.filter(volunteer => volunteer.id !== id));
+    setVolunteers(volunteers.filter(v => v.id !== id));
   };
 
   const getInactiveReasonLabel = (reason?: 'psicotecnico' | 'antecedentes_penales') => {
@@ -60,10 +91,10 @@ export default function VolunteersManagement() {
     }
   };
 
-  const filteredVolunteers = volunteers.filter(volunteer =>
-    volunteer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    volunteer.discipline.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    volunteer.dni.includes(searchTerm)
+  const filteredVolunteers = volunteers.filter((v) =>
+    v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    v.discipline.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    v.dni.includes(searchTerm)
   );
 
   return (
@@ -76,7 +107,7 @@ export default function VolunteersManagement() {
           <input
             type="text"
             placeholder="Buscar voluntarios..."
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -118,24 +149,12 @@ export default function VolunteersManagement() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Voluntario
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                DNI
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Disciplina
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Grupos Activos
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Estado
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Acciones
-              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Voluntario</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DNI</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Disciplina</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grupos Activos</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -143,29 +162,17 @@ export default function VolunteersManagement() {
               <tr key={volunteer.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex flex-col">
-                    <div className="text-sm font-medium text-gray-900">
-                      {volunteer.name}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {volunteer.email}
-                    </div>
+                    <div className="text-sm font-medium text-gray-900">{volunteer.name}</div>
+                    <div className="text-sm text-gray-500">{volunteer.email}</div>
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {volunteer.dni}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {volunteer.discipline}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {volunteer.activeGroups}
-                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{volunteer.dni}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{volunteer.discipline}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{volunteer.activeGroups}</td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex flex-col">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      volunteer.status === 'active'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
+                      volunteer.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                     }`}>
                       {volunteer.status === 'active' ? 'Activo' : 'Inactivo'}
                     </span>

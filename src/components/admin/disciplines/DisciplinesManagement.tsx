@@ -1,64 +1,111 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Search, Edit2, Trash2 } from 'lucide-react';
+import axios from 'axios';
 import DisciplineForm from './DisciplineForm';
+import toast from 'react-hot-toast';
 
 interface Discipline {
   id: number;
   name: string;
   description: string;
   category: string;
-  groupsCount: number;
 }
 
+interface Group {
+  id: number;
+  name: string;
+  discipline: string;
+}
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 export default function DisciplinesManagement() {
-  const [disciplines, setDisciplines] = useState<Discipline[]>([
-    {
-      id: 1,
-      name: 'Fútbol',
-      description: 'Entrenamiento de fútbol para nivel inicial',
-      category: 'Deportes',
-      groupsCount: 2
-    },
-    {
-      id: 2,
-      name: 'Arte',
-      description: 'Clases de pintura y dibujo',
-      category: 'Arte y Cultura',
-      groupsCount: 1
-    },
-    {
-      id: 3,
-      name: 'Tenis',
-      description: 'Entrenamiento de tenis para principiantes',
-      category: 'Deportes',
-      groupsCount: 1
-    }
-  ]);
+  const [disciplines, setDisciplines] = useState<Discipline[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDiscipline, setSelectedDiscipline] = useState<Discipline | null>(null);
 
-  const handleAddDiscipline = (newDiscipline: Omit<Discipline, 'id'>) => {
-    setDisciplines([...disciplines, { ...newDiscipline, id: disciplines.length + 1 }]);
-    setShowForm(false);
+  const token = localStorage.getItem('token');
+
+  const fetchData = async () => {
+    try {
+      const [discRes, groupRes] = await Promise.all([
+        axios.get(`${API_URL}/api/disciplines`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        axios.get(`${API_URL}/api/groups`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+      setDisciplines(discRes.data.data);
+      setGroups(groupRes.data.data);
+    } catch (error) {
+      console.error('Error al cargar datos:', error);
+      toast.error('No se pudieron cargar los datos');
+    }
   };
 
-  const handleEditDiscipline = (updatedDiscipline: Discipline) => {
-    setDisciplines(disciplines.map(discipline => 
-      discipline.id === updatedDiscipline.id ? updatedDiscipline : discipline
-    ));
-    setSelectedDiscipline(null);
-    setShowForm(false);
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleAddDiscipline = async (newDiscipline: Omit<Discipline, 'id'>) => {
+    try {
+      const res = await axios.post(`${API_URL}/api/disciplines`, newDiscipline, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setDisciplines([...disciplines, res.data.data]);
+      toast.success('Disciplina creada');
+      setShowForm(false);
+    } catch (error) {
+      console.error('Error al crear disciplina:', error);
+      toast.error('No se pudo crear la disciplina');
+    }
   };
 
-  const handleDeleteDiscipline = (id: number) => {
-    setDisciplines(disciplines.filter(discipline => discipline.id !== id));
+  const handleEditDiscipline = async (updatedDiscipline: Discipline) => {
+    try {
+      const res = await axios.put(
+        `${API_URL}/api/disciplines/${updatedDiscipline.id}`,
+        updatedDiscipline,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setDisciplines(
+        disciplines.map((d) =>
+          d.id === updatedDiscipline.id ? res.data.data : d
+        )
+      );
+      toast.success('Disciplina actualizada');
+      setShowForm(false);
+      setSelectedDiscipline(null);
+    } catch (error) {
+      console.error('Error al actualizar disciplina:', error);
+      toast.error('No se pudo actualizar');
+    }
   };
 
-  const filteredDisciplines = disciplines.filter(discipline =>
-    discipline.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    discipline.category.toLowerCase().includes(searchTerm.toLowerCase())
+  const handleDeleteDiscipline = async (id: number) => {
+    try {
+      await axios.delete(`${API_URL}/api/disciplines/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setDisciplines(disciplines.filter((d) => d.id !== id));
+      toast.success('Disciplina eliminada');
+    } catch (error) {
+      console.error('Error al eliminar disciplina:', error);
+      toast.error('No se pudo eliminar');
+    }
+  };
+
+  const filteredDisciplines = disciplines.filter((discipline) =>
+    (discipline.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (discipline.category?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
+
+  const countGroupsForDiscipline = (disciplineName: string) => {
+    return groups.filter((g) => g.discipline === disciplineName).length;
+  };
 
   return (
     <div className="space-y-6">
@@ -102,18 +149,10 @@ export default function DisciplinesManagement() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Nombre
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Categoría
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Grupos
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Acciones
-              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoría</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grupos</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -121,19 +160,13 @@ export default function DisciplinesManagement() {
               <tr key={discipline.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex flex-col">
-                    <div className="text-sm font-medium text-gray-900">
-                      {discipline.name}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {discipline.description}
-                    </div>
+                    <div className="text-sm font-medium text-gray-900">{discipline.name}</div>
+                    <div className="text-sm text-gray-500">{discipline.description}</div>
                   </div>
                 </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{discipline.category}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {discipline.category}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {discipline.groupsCount}
+                  {countGroupsForDiscipline(discipline.name)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button

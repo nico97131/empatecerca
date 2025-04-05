@@ -1,121 +1,114 @@
-import Discipline from '../models/discipline.model.js';
+import db from '../config/db.js';
 
-// @desc    Get all disciplines
-// @route   GET /api/disciplines
-// @access  Private
+/**
+ * @desc    Obtener todas las disciplinas
+ * @route   GET /api/disciplines
+ * @access  Private
+ */
 export const getDisciplines = async (req, res) => {
   try {
-    const disciplines = await Discipline.find();
+    const [rows] = await db.query('SELECT * FROM disciplines');
     res.json({
       success: true,
-      count: disciplines.length,
-      data: disciplines
+      count: rows.length,
+      data: rows
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Get single discipline
-// @route   GET /api/disciplines/:id
-// @access  Private
+/**
+ * @desc    Obtener una disciplina por ID
+ * @route   GET /api/disciplines/:id
+ * @access  Private
+ */
 export const getDiscipline = async (req, res) => {
   try {
-    const discipline = await Discipline.findById(req.params.id);
+    const [rows] = await db.query('SELECT * FROM disciplines WHERE id = ?', [req.params.id]);
+    const discipline = rows[0];
+
     if (!discipline) {
-      return res.status(404).json({
-        success: false,
-        message: 'Discipline not found'
-      });
+      return res.status(404).json({ success: false, message: 'Discipline not found' });
     }
-    res.json({
-      success: true,
-      data: discipline
-    });
+
+    res.json({ success: true, data: discipline });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Create discipline
-// @route   POST /api/disciplines
-// @access  Private/Admin
+/**
+ * @desc    Crear nueva disciplina
+ * @route   POST /api/disciplines
+ * @access  Private/Admin
+ */
 export const createDiscipline = async (req, res) => {
-  try {
-    const discipline = await Discipline.create(req.body);
-    res.status(201).json({
-      success: true,
-      data: discipline
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-};
+  const { name, description, category } = req.body;
 
-// @desc    Update discipline
-// @route   PUT /api/disciplines/:id
-// @access  Private/Admin
-export const updateDiscipline = async (req, res) => {
   try {
-    const discipline = await Discipline.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      {
-        new: true,
-        runValidators: true
-      }
+    const [result] = await db.query(
+      'INSERT INTO disciplines (name, description, category) VALUES (?, ?, ?)',
+      [name, description, category]
     );
 
-    if (!discipline) {
-      return res.status(404).json({
-        success: false,
-        message: 'Discipline not found'
-      });
-    }
+    const newDiscipline = {
+      id: result.insertId,
+      name,
+      description,
+      category,
+      groupsCount: 0
+    };
 
-    res.json({
+    res.status(201).json({
       success: true,
-      data: discipline
+      data: newDiscipline
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    console.error('❌ Error al crear disciplina:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Delete discipline
-// @route   DELETE /api/disciplines/:id
-// @access  Private/Admin
-export const deleteDiscipline = async (req, res) => {
+
+/**
+ * @desc    Actualizar disciplina
+ * @route   PUT /api/disciplines/:id
+ * @access  Private/Admin
+ */
+export const updateDiscipline = async (req, res) => {
+  const { name, description, category } = req.body;
   try {
-    const discipline = await Discipline.findByIdAndDelete(req.params.id);
-    
-    if (!discipline) {
-      return res.status(404).json({
-        success: false,
-        message: 'Discipline not found'
-      });
+    const [result] = await db.query(
+      'UPDATE disciplines SET name = ?, description = ?, category = ? WHERE id = ?',
+      [name, description, category, req.params.id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Discipline not found' });
     }
 
-    res.json({
-      success: true,
-      message: 'Discipline deleted successfully'
-    });
+    res.json({ success: true, message: 'Discipline updated successfully' });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * @desc    Eliminar disciplina
+ * @route   DELETE /api/disciplines/:id
+ * @access  Private/Admin
+ */
+export const deleteDiscipline = async (req, res) => {
+  try {
+    const [result] = await db.query('DELETE FROM disciplines WHERE id = ?', [req.params.id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Discipline not found' });
+    }
+
+    res.json({ success: true, message: 'Discipline deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };

@@ -1,12 +1,12 @@
-import { useState } from 'react';
-import { Users, LogOut, Calendar, MessageSquare, SmilePlus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, LogOut, MessageSquare, SmilePlus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import MessagingPanel from '../components/voluntario/MessagingPanel';
 import StudentRating from '../components/voluntario/StudentRating';
 import MedicalRecord from '../components/voluntario/MedicalRecord';
-import { mockGroups } from '../data/mockGroups';
 import { mockStudents } from '../data/mockStudents';
-import { mockVolunteers } from '../data/mockVolunteers';
+import axios from 'axios';
+import { API_URL } from '../config';
 
 interface Alumno {
   id: number;
@@ -41,9 +41,10 @@ interface Alumno {
 
 interface Grupo {
   id: number;
-  nombre: string;
-  materia: string;
-  alumnos: Alumno[];
+  name: string;
+  discipline: string;
+  volunteerInCharge?: number;
+  schedule: string;
 }
 
 export default function VoluntarioPanel() {
@@ -52,14 +53,32 @@ export default function VoluntarioPanel() {
   const [selectedAlumno, setSelectedAlumno] = useState<Alumno | null>(null);
   const [showMedicalRecord, setShowMedicalRecord] = useState(false);
   const [showRatingForm, setShowRatingForm] = useState(false);
+  const [groups, setGroups] = useState<Grupo[]>([]);
 
-  // Get volunteer's assigned groups
-  const volunteer = mockVolunteers.find(v => v.email === user?.email);
-  const assignedGroups = mockGroups.filter(group => 
-    volunteer?.assignedGroups.includes(group.id)
-  );
+  useEffect(() => {
+    const fetchGroups = async () => {
+      const token = localStorage.getItem('token');
+      try {
+        const res = await axios.get(`${API_URL}/api/groups`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        setGroups(res.data.data);
+      } catch (err) {
+        console.error('❌ Error al obtener grupos:', err);
+      }
+    };
 
-  // Get students from assigned groups
+    fetchGroups();
+  }, []);
+
+  const volunteerEmail = user?.email;
+  const assignedGroups = groups.filter(g => {
+    const volunteer = user?.id || null;
+    return g.volunteerInCharge === volunteer;
+  });
+
   const groupStudents = assignedGroups.map(group => {
     const students = mockStudents.filter(student => 
       student.groupId === group.id
@@ -136,14 +155,12 @@ export default function VoluntarioPanel() {
                 group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm
                 ${activeTab === 'overview'
                   ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
               `}
             >
-              <Users className={`
-                -ml-0.5 mr-2 h-5 w-5
-                ${activeTab === 'overview' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'}
-              `} />
+              <Users className={`-ml-0.5 mr-2 h-5 w-5 ${
+                activeTab === 'overview' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'
+              }`} />
               Grupos y Alumnos
             </button>
             <button
@@ -152,14 +169,12 @@ export default function VoluntarioPanel() {
                 group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm
                 ${activeTab === 'messages'
                   ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
               `}
             >
-              <MessageSquare className={`
-                -ml-0.5 mr-2 h-5 w-5
-                ${activeTab === 'messages' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'}
-              `} />
+              <MessageSquare className={`-ml-0.5 mr-2 h-5 w-5 ${
+                activeTab === 'messages' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'
+              }`} />
               Mensajes
             </button>
           </nav>

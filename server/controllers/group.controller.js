@@ -1,42 +1,37 @@
-import Group from '../models/group.model.js';
+import db from '../config/db.js';
 
-// @desc    Get all groups
+// @desc    Obtener todos los grupos
 // @route   GET /api/groups
 // @access  Private
 export const getGroups = async (req, res) => {
   try {
-    const groups = await Group.find()
-      .populate('discipline', 'name')
-      .populate('volunteer', 'name email')
-      .populate('students', 'name');
-
+    const [groups] = await db.execute('SELECT * FROM grupos');
     res.json({
       success: true,
       count: groups.length,
       data: groups
     });
   } catch (error) {
+    console.error('❌ Error al obtener grupos:', error.message);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: 'Error al obtener los grupos'
     });
   }
 };
 
-// @desc    Get single group
+// @desc    Obtener un grupo por ID
 // @route   GET /api/groups/:id
 // @access  Private
 export const getGroup = async (req, res) => {
   try {
-    const group = await Group.findById(req.params.id)
-      .populate('discipline', 'name')
-      .populate('volunteer', 'name email')
-      .populate('students', 'name');
+    const [rows] = await db.execute('SELECT * FROM grupos WHERE id = ?', [req.params.id]);
+    const group = rows[0];
 
     if (!group) {
       return res.status(404).json({
         success: false,
-        message: 'Group not found'
+        message: 'Grupo no encontrado'
       });
     }
 
@@ -52,162 +47,170 @@ export const getGroup = async (req, res) => {
   }
 };
 
-// @desc    Create group
+// @desc    Crear grupo
 // @route   POST /api/groups
 // @access  Private/Admin
 export const createGroup = async (req, res) => {
+  const { name, discipline, schedule, maxMembers, currentMembers, location, volunteerInCharge } = req.body;
+
+  console.log('[📥 GroupController] Datos recibidos para crear grupo:', {
+    name, discipline, schedule, maxMembers, currentMembers, location, volunteerInCharge
+  });
+
   try {
-    const group = await Group.create(req.body);
+    const [result] = await db.execute(
+      'INSERT INTO grupos (name, discipline, schedule, maxMembers, currentMembers, location, volunteerInCharge) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [name, discipline, schedule, maxMembers, currentMembers, location, volunteerInCharge || null]
+    );
+
+    const newGroupId = result.insertId;
+    const [newGroup] = await db.execute('SELECT * FROM grupos WHERE id = ?', [newGroupId]);
+
     res.status(201).json({
       success: true,
-      data: group
+      data: newGroup[0]
     });
   } catch (error) {
+    console.error('❌ Error al crear grupo:', error.message);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: 'Error al crear el grupo',
+      error: error.message // 🧠 Agregamos detalle para verlo desde el frontend si querés
     });
   }
 };
 
-// @desc    Update group
+
+// @desc    Actualizar grupo
 // @route   PUT /api/groups/:id
 // @access  Private/Admin
 export const updateGroup = async (req, res) => {
+  const { name, discipline, schedule, maxMembers, currentMembers, location, volunteerInCharge } = req.body;
+
   try {
-    const group = await Group.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      {
-        new: true,
-        runValidators: true
-      }
+    const [result] = await db.execute(
+      'UPDATE grupos SET name = ?, discipline = ?, schedule = ?, maxMembers = ?, currentMembers = ?, location = ?, volunteerInCharge = ? WHERE id = ?',
+      [name, discipline, schedule, maxMembers, currentMembers, location, volunteerInCharge || null, req.params.id]
     );
 
-    if (!group) {
+    if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Group not found'
+        message: 'Grupo no encontrado'
       });
     }
 
+    const [updatedGroup] = await db.execute('SELECT * FROM grupos WHERE id = ?', [req.params.id]);
+
     res.json({
       success: true,
-      data: group
+      data: updatedGroup[0]
     });
   } catch (error) {
+    console.error('❌ Error al actualizar grupo:', error.message);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: 'Error al actualizar el grupo'
     });
   }
 };
 
-// @desc    Delete group
+// @desc    Eliminar grupo
 // @route   DELETE /api/groups/:id
 // @access  Private/Admin
 export const deleteGroup = async (req, res) => {
   try {
-    const group = await Group.findByIdAndDelete(req.params.id);
-    
-    if (!group) {
+    const [result] = await db.execute('DELETE FROM grupos WHERE id = ?', [req.params.id]);
+
+    if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Group not found'
+        message: 'Grupo no encontrado'
       });
     }
 
     res.json({
       success: true,
-      message: 'Group deleted successfully'
+      message: 'Grupo eliminado exitosamente'
     });
   } catch (error) {
+    console.error('❌ Error al eliminar grupo:', error.message);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: 'Error al eliminar el grupo'
     });
   }
-};
+}
 
-// @desc    Add student to group
+// @desc    Agregar alumno a grupo
 // @route   POST /api/groups/:id/students
 // @access  Private/Admin
 export const addStudentToGroup = async (req, res) => {
+  const groupId = req.params.id;
+  const { studentId } = req.body;
+
   try {
-    const group = await Group.findById(req.params.id);
-    
-    if (!group) {
-      return res.status(404).json({
-        success: false,
-        message: 'Group not found'
-      });
+    // Verificar que el grupo exista
+    const [groupRows] = await db.execute('SELECT * FROM grupos WHERE id = ?', [groupId]);
+    if (groupRows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Grupo no encontrado' });
     }
 
-    // Verificar si el grupo está lleno
-    if (group.students.length >= group.maxMembers) {
-      return res.status(400).json({
-        success: false,
-        message: 'Group is at maximum capacity'
-      });
+    // Verificar capacidad
+    const [countRows] = await db.execute(
+      'SELECT COUNT(*) AS count FROM alumno_grupo WHERE grupo_id = ?',
+      [groupId]
+    );
+    if (countRows[0].count >= groupRows[0].maxMembers) {
+      return res.status(400).json({ success: false, message: 'El grupo está completo' });
     }
 
-    // Verificar si el estudiante ya está en el grupo
-    if (group.students.includes(req.body.studentId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Student is already in this group'
-      });
+    // Verificar si ya está asignado
+    const [existingRows] = await db.execute(
+      'SELECT * FROM alumno_grupo WHERE grupo_id = ? AND alumno_id = ?',
+      [groupId, studentId]
+    );
+    if (existingRows.length > 0) {
+      return res.status(400).json({ success: false, message: 'Alumno ya asignado a este grupo' });
     }
 
-    group.students.push(req.body.studentId);
-    await group.save();
+    // Insertar en tabla intermedia
+    await db.execute(
+      'INSERT INTO alumno_grupo (grupo_id, alumno_id) VALUES (?, ?)',
+      [groupId, studentId]
+    );
 
-    res.json({
-      success: true,
-      data: group
-    });
+    res.json({ success: true, message: 'Alumno agregado al grupo correctamente' });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    console.error('❌ Error al agregar alumno:', error.message);
+    res.status(500).json({ success: false, message: 'Error al agregar alumno al grupo' });
   }
 };
 
-// @desc    Remove student from group
+// @desc    Eliminar alumno de grupo
 // @route   DELETE /api/groups/:id/students/:studentId
 // @access  Private/Admin
 export const removeStudentFromGroup = async (req, res) => {
+  const groupId = req.params.id;
+  const studentId = req.params.studentId;
+
   try {
-    const group = await Group.findById(req.params.id);
-    
-    if (!group) {
-      return res.status(404).json({
-        success: false,
-        message: 'Group not found'
-      });
+    const [result] = await db.execute(
+      'DELETE FROM alumno_grupo WHERE grupo_id = ? AND alumno_id = ?',
+      [groupId, studentId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Alumno no encontrado en el grupo' });
     }
 
-    // Verificar si el estudiante está en el grupo
-    const studentIndex = group.students.indexOf(req.params.studentId);
-    if (studentIndex === -1) {
-      return res.status(400).json({
-        success: false,
-        message: 'Student is not in this group'
-      });
-    }
-
-    group.students.splice(studentIndex, 1);
-    await group.save();
-
-    res.json({
-      success: true,
-      data: group
-    });
+    res.json({ success: true, message: 'Alumno removido del grupo correctamente' });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    console.error('❌ Error al remover alumno:', error.message);
+    res.status(500).json({ success: false, message: 'Error al remover alumno del grupo' });
   }
 };
+
+
+
+;

@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { User, TrendingUp, LogOut, Calendar, MessageSquare, FileText } from 'lucide-react';
 import MessagingPanel from '../components/tutor/MessagingPanel';
 import ProgressHistory from '../components/tutor/ProgressHistory';
 import MedicalRecordForm from '../components/tutor/MedicalRecordForm';
 import { mockStudents } from '../data/mockStudents';
-import { mockGroups } from '../data/mockGroups';
+import axios from 'axios';
+import { API_URL } from '../config';
 
 interface Alumno {
   id: number;
@@ -39,14 +40,39 @@ interface Alumno {
   groupId?: number;
 }
 
+interface Group {
+  id: number;
+  name: string;
+  discipline: string;
+  schedule: string;
+}
+
 export default function TutorPanel() {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'messages'>('overview');
   const [selectedAlumno, setSelectedAlumno] = useState<Alumno | null>(null);
   const [showProgress, setShowProgress] = useState(false);
   const [showMedicalRecord, setShowMedicalRecord] = useState(false);
+  const [groups, setGroups] = useState<Group[]>([]);
 
-  // Get students assigned to this tutor
+  useEffect(() => {
+    const fetchGroups = async () => {
+      const token = localStorage.getItem('token');
+      try {
+        const res = await axios.get(`${API_URL}/api/groups`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        setGroups(res.data.data);
+      } catch (error) {
+        console.error('❌ Error al obtener grupos:', error);
+      }
+    };
+
+    fetchGroups();
+  }, []);
+
   const myStudents = mockStudents.filter(student => {
     const tutor = user?.email && user.email.split('@')[0];
     const studentTutor = student.tutorId === 1 ? 'maria.gonzalez' : 'juan.perez';
@@ -100,7 +126,7 @@ export default function TutorPanel() {
 
   const getGroupName = (groupId?: number) => {
     if (!groupId) return 'Sin asignación';
-    const group = mockGroups.find(g => g.id === groupId);
+    const group = groups.find(g => g.id === groupId);
     return group ? group.name : 'Sin asignación';
   };
 
@@ -131,34 +157,28 @@ export default function TutorPanel() {
           <nav className="-mb-px flex space-x-8">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`
-                group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm
+              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm
                 ${activeTab === 'overview'
                   ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
               `}
             >
-              <User className={`
-                -ml-0.5 mr-2 h-5 w-5
-                ${activeTab === 'overview' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'}
-              `} />
+              <User className={`-ml-0.5 mr-2 h-5 w-5 ${
+                activeTab === 'overview' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'
+              }`} />
               Vista General
             </button>
             <button
               onClick={() => setActiveTab('messages')}
-              className={`
-                group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm
+              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm
                 ${activeTab === 'messages'
                   ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
               `}
             >
-              <MessageSquare className={`
-                -ml-0.5 mr-2 h-5 w-5
-                ${activeTab === 'messages' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'}
-              `} />
+              <MessageSquare className={`-ml-0.5 mr-2 h-5 w-5 ${
+                activeTab === 'messages' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'
+              }`} />
               Mensajes
             </button>
           </nav>

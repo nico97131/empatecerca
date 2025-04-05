@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Search, Edit2, Trash2, FileText } from 'lucide-react';
 import StudentForm from './StudentForm';
 import MedicalRecordForm from './MedicalRecordForm';
 import { mockTutors } from '../../../data/mockTutors';
 import { mockStudents } from '../../../data/mockStudents';
-import { mockGroups } from '../../../data/mockGroups';
+import axios from 'axios';
+import { API_URL } from '../../../config';
 
 interface Student {
   id: number;
@@ -25,12 +26,39 @@ interface Student {
   };
 }
 
+interface Group {
+  id: number;
+  name: string;
+  discipline: string;
+  schedule: string;
+}
+
 export default function StudentManagement() {
   const [students, setStudents] = useState<Student[]>(mockStudents);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [showMedicalForm, setShowMedicalForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
+  useEffect(() => {
+    const fetchGroups = async () => {
+      const token = localStorage.getItem('token');
+      try {
+        const res = await axios.get(`${API_URL}/api/groups`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        console.log('✅ Grupos cargados:', res.data.data);
+        setGroups(res.data.data);
+      } catch (error: any) {
+        console.error('❌ Error al obtener grupos:', error.message);
+      }
+    };
+
+    fetchGroups();
+  }, []);
 
   const handleAddStudent = (newStudent: Omit<Student, 'id'>) => {
     setStudents([...students, { ...newStudent, id: students.length + 1 }]);
@@ -38,7 +66,7 @@ export default function StudentManagement() {
   };
 
   const handleEditStudent = (updatedStudent: Student) => {
-    setStudents(students.map(student => 
+    setStudents(students.map(student =>
       student.id === updatedStudent.id ? updatedStudent : student
     ));
     setSelectedStudent(null);
@@ -67,7 +95,7 @@ export default function StudentManagement() {
   const getGroupInfo = (student: Student) => {
     if (!student.discipline) return 'Sin asignación';
     if (!student.groupId) return `${student.discipline} - Sin grupo asignado`;
-    const group = mockGroups.find(g => g.id === student.groupId);
+    const group = groups.find(g => g.id === student.groupId);
     return group ? `${student.discipline} - ${group.name}` : 'Sin asignación';
   };
 
@@ -130,36 +158,20 @@ export default function StudentManagement() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Alumno
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                DNI
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Fecha de Nacimiento
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Tutor
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Grupo
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Ficha Médica
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Acciones
-              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Alumno</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DNI</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha de Nacimiento</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tutor</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grupo</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ficha Médica</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredStudents.map((student) => (
               <tr key={student.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">
-                    {student.firstName} {student.lastName}
-                  </div>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {student.firstName} {student.lastName}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {student.dni}

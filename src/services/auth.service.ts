@@ -1,62 +1,78 @@
-import api from './api';
 import { LoginCredentials, User } from '../types/auth';
-import { mockUsers } from '../data/mockUsers';
 
-// Simulación de delay para la API
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const API_URL = '/api/auth';
 
 export const login = async (credentials: LoginCredentials): Promise<{ token: string; user: User }> => {
   try {
-    // Simulamos un delay de red
-    await delay(1000);
+    const response = await fetch(`${API_URL}/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(credentials)
+    });
 
-    // Buscar usuario en datos mock
-    const user = mockUsers.find(
-      u => u.email === credentials.email && u.password === credentials.password
-    );
-
-    if (!user) {
-      throw new Error('Credenciales inválidas. Por favor, verifica tu email y contraseña.');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al iniciar sesión');
     }
 
-    // Generar token mock
-    const token = btoa(JSON.stringify({ id: user.id, email: user.email, role: user.role }));
+    const data = await response.json();
 
-    // Omitir la contraseña del objeto de usuario
-    const { password, ...userWithoutPassword } = user;
+    // Guardar el token en localStorage
+    localStorage.setItem('token', data.token);
 
     return {
-      token,
-      user: userWithoutPassword
+      token: data.token,
+      user: data.user
     };
   } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(error.message);
-    }
-    throw new Error('Error al iniciar sesión. Por favor, intenta nuevamente.');
+    throw new Error('Credenciales inválidas o error de red.');
   }
 };
 
 export const getCurrentUser = async (): Promise<{ user: User }> => {
-  try {
-    const token = localStorage.getItem('token');
-    if (!token) throw new Error('No hay token de autenticación');
+  const token = localStorage.getItem('token');
+  if (!token) throw new Error('No hay token');
 
-    // Decodificar token mock
-    const userData = JSON.parse(atob(token));
-    const user = mockUsers.find(u => u.id === userData.id);
+  const response = await fetch('/api/auth/me', {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
 
-    if (!user) throw new Error('Usuario no encontrado');
-
-    const { password, ...userWithoutPassword } = user;
-    return { user: userWithoutPassword };
-  } catch (error) {
-    throw new Error('Error al obtener información del usuario');
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Error al obtener el usuario');
   }
+
+  const data = await response.json();
+  return { user: data.user };
 };
 
+
 export const updatePassword = async (passwords: { currentPassword: string; newPassword: string }): Promise<{ message: string }> => {
-  // Simulación de actualización de contraseña
-  await delay(1000);
-  return { message: 'Contraseña actualizada exitosamente' };
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) throw new Error('No hay token');
+
+    const response = await fetch(`${API_URL}/updatepassword`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(passwords)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Error al actualizar la contraseña');
+    }
+
+    const data = await response.json();
+    return { message: data.message };
+  } catch (error) {
+    throw new Error('Error al actualizar contraseña');
+  }
 };

@@ -1,14 +1,24 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { mockDisciplines } from '../../../data/mockDisciplines';
+import axios from 'axios';
+import { API_URL } from '../../../config';
 
 interface Group {
   id: number;
   name: string;
   discipline: string;
-  maxMembers: number;
   schedule: string;
+  maxMembers: number;
   currentMembers: number;
+  location: string;
+  volunteerInCharge?: number | null;
+}
+
+interface Discipline {
+  id: number;
+  name: string;
+  description: string;
+  category: string;
 }
 
 interface GroupFormProps {
@@ -21,16 +31,41 @@ export default function GroupForm({ group, onSubmit, onCancel }: GroupFormProps)
   const [formData, setFormData] = useState({
     name: '',
     discipline: '',
-    maxMembers: 15,
     schedule: '',
-    currentMembers: 0
+    maxMembers: 15,
+    currentMembers: 0,
+    location: '',
+    volunteerInCharge: null as number | null
   });
+
+  const [disciplines, setDisciplines] = useState<Discipline[]>([]);
 
   useEffect(() => {
     if (group) {
-      setFormData(group);
+      setFormData({
+        ...group,
+        volunteerInCharge: group.volunteerInCharge ?? null,
+        location: group.location ?? ''
+      });
     }
   }, [group]);
+
+  useEffect(() => {
+    const fetchDisciplines = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API_URL}/api/disciplines`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        console.log('[GroupForm] ✅ Disciplinas recibidas:', res.data);
+        setDisciplines(res.data?.data || res.data);
+      } catch (error) {
+        console.error('[GroupForm] ❌ Error al obtener disciplinas:', error);
+      }
+    };
+
+    fetchDisciplines();
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,28 +79,14 @@ export default function GroupForm({ group, onSubmit, onCancel }: GroupFormProps)
           <h3 className="text-lg font-medium text-gray-900">
             {group ? 'Editar Grupo' : 'Nuevo Grupo'}
           </h3>
-          <button
-            onClick={onCancel}
-            className="text-gray-400 hover:text-gray-500"
-          >
+          <button onClick={onCancel} className="text-gray-400 hover:text-gray-500">
             <X className="h-6 w-6" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-              Nombre
-            </label>
-            <input
-              type="text"
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              required
-            />
-          </div>
+          <Input label="Nombre del Grupo" id="name" value={formData.name}
+                 onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
 
           <div>
             <label htmlFor="discipline" className="block text-sm font-medium text-gray-700">
@@ -79,7 +100,7 @@ export default function GroupForm({ group, onSubmit, onCancel }: GroupFormProps)
               required
             >
               <option value="">Seleccionar disciplina</option>
-              {mockDisciplines.map(discipline => (
+              {disciplines.map((discipline) => (
                 <option key={discipline.id} value={discipline.name}>
                   {discipline.name}
                 </option>
@@ -87,35 +108,23 @@ export default function GroupForm({ group, onSubmit, onCancel }: GroupFormProps)
             </select>
           </div>
 
-          <div>
-            <label htmlFor="schedule" className="block text-sm font-medium text-gray-700">
-              Horario
-            </label>
-            <input
-              type="text"
-              id="schedule"
-              value={formData.schedule}
-              onChange={(e) => setFormData({ ...formData, schedule: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              required
-              placeholder="ej: Lunes y Miércoles 15:00-16:30"
-            />
-          </div>
+          <Input label="Horario" id="schedule" value={formData.schedule}
+                 onChange={(e) => setFormData({ ...formData, schedule: e.target.value })}
+                 placeholder="Ej: Lunes y Miércoles 15:00-16:30" />
 
-          <div>
-            <label htmlFor="maxMembers" className="block text-sm font-medium text-gray-700">
-              Capacidad
-            </label>
-            <input
-              type="number"
-              id="maxMembers"
-              value={formData.maxMembers}
-              onChange={(e) => setFormData({ ...formData, maxMembers: parseInt(e.target.value) })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              required
-              min="1"
-            />
-          </div>
+          <Input label="Capacidad Máxima" id="maxMembers" type="number" value={formData.maxMembers}
+                 onChange={(e) => setFormData({ ...formData, maxMembers: parseInt(e.target.value) })}
+                 min={1} />
+
+          <Input label="Ubicación" id="location" value={formData.location}
+                 onChange={(e) => setFormData({ ...formData, location: e.target.value })} />
+
+          <Input label="ID de Voluntario a cargo (opcional)" id="volunteerInCharge"
+                 value={formData.volunteerInCharge ?? ''}
+                 onChange={(e) => setFormData({
+                   ...formData,
+                   volunteerInCharge: e.target.value === '' ? null : parseInt(e.target.value)
+                 })} placeholder="Ej: 2" />
 
           <div className="flex justify-end space-x-3 pt-4">
             <button
@@ -134,6 +143,21 @@ export default function GroupForm({ group, onSubmit, onCancel }: GroupFormProps)
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+function Input({ label, id, value, onChange, ...props }: any) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700">{label}</label>
+      <input
+        id={id}
+        value={value}
+        onChange={onChange}
+        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+        {...props}
+      />
     </div>
   );
 }

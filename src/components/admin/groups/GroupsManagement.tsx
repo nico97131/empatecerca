@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Search, Edit2, Trash2 } from 'lucide-react';
 import GroupForm from './GroupForm';
-import { mockGroups } from '../../../data/mockGroups';
+import axios from 'axios';
+import { API_URL } from '../../../config';
 
 interface Group {
   id: number;
@@ -10,33 +11,80 @@ interface Group {
   schedule: string;
   maxMembers: number;
   currentMembers: number;
-  volunteersCount: number;
+  location?: string;
+  volunteerInCharge?: number | null;
 }
 
 export default function GroupsManagement() {
-  const [groups, setGroups] = useState<Group[]>(mockGroups.map(group => ({
-    ...group,
-    volunteersCount: group.volunteerInCharge ? 1 : 0
-  })));
+  const [groups, setGroups] = useState<Group[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
 
-  const handleAddGroup = (newGroup: Omit<Group, 'id'>) => {
-    setGroups([...groups, { ...newGroup, id: groups.length + 1 }]);
-    setShowForm(false);
+  useEffect(() => {
+    const fetchGroups = async () => {
+      const token = localStorage.getItem('token');
+
+      try {
+        const res = await axios.get(`${API_URL}/api/groups`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+
+        console.log('[GroupsManagement] ✅ Grupos cargados:', res.data.data);
+        setGroups(res.data.data);
+      } catch (error: any) {
+        console.error('[GroupsManagement] ❌ Error al cargar grupos:', error.response?.data || error.message);
+      }
+    };
+
+    fetchGroups();
+  }, []);
+
+  const handleAddGroup = async (newGroup: Omit<Group, 'id'>) => {
+    const token = localStorage.getItem('token');
+  
+    try {
+      const res = await axios.post(`${API_URL}/api/groups`, newGroup, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+  
+      console.log('[GroupsManagement] ✅ Grupo creado en base:', res.data.data);
+  
+      // Agregamos el nuevo grupo al estado con el ID real
+      setGroups([...groups, res.data.data]);
+      setShowForm(false);
+    } catch (error: any) {
+      console.error('[GroupsManagement] ❌ Error al crear grupo:', error.response?.data || error.message);
+    }
   };
+  
 
   const handleEditGroup = (updatedGroup: Group) => {
-    setGroups(groups.map(group => 
+    setGroups(groups.map(group =>
       group.id === updatedGroup.id ? updatedGroup : group
     ));
     setSelectedGroup(null);
     setShowForm(false);
   };
 
-  const handleDeleteGroup = (id: number) => {
-    setGroups(groups.filter(group => group.id !== id));
+  const handleDeleteGroup = async (id: number) => {
+    const token = localStorage.getItem('token');
+    try {
+      await axios.delete(`${API_URL}/api/groups/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      setGroups(groups.filter(group => group.id !== id));
+      console.log('[GroupsManagement] 🗑️ Grupo eliminado:', id);
+    } catch (error: any) {
+      console.error('[GroupsManagement] ❌ Error al eliminar grupo:', error.response?.data || error.message);
+    }
   };
 
   const filteredGroups = groups.filter(group =>
@@ -98,9 +146,6 @@ export default function GroupsManagement() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Capacidad
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Voluntarios
-              </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Acciones
               </th>
@@ -120,9 +165,6 @@ export default function GroupsManagement() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {group.currentMembers}/{group.maxMembers}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {group.volunteersCount}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button

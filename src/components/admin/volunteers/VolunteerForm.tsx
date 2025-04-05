@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { mockDisciplines } from '../../../data/mockDisciplines';
-import { mockGroups } from '../../../data/mockGroups';
+import axios from 'axios';
+import { API_URL } from '../../../config';
+
+interface Group {
+  id: number;
+  name: string;
+  discipline: string;
+  schedule: string;
+}
 
 interface Volunteer {
   id: number;
@@ -18,6 +25,13 @@ interface Volunteer {
   inactiveReason?: 'psicotecnico' | 'antecedentes_penales';
 }
 
+interface Discipline {
+  id: number;
+  name: string;
+  description: string;
+  category: string;
+}
+
 interface VolunteerFormProps {
   volunteer?: Volunteer | null;
   onSubmit: (volunteer: any) => void;
@@ -25,19 +39,22 @@ interface VolunteerFormProps {
 }
 
 export default function VolunteerForm({ volunteer, onSubmit, onCancel }: VolunteerFormProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<Volunteer>({
     name: '',
     email: '',
     phone: '',
     dni: '',
     birthDate: '',
     discipline: '',
-    groups: [] as string[],
-    availability: [] as string[],
+    groups: [],
+    availability: [],
     activeGroups: 0,
-    status: 'active' as const,
-    inactiveReason: undefined as undefined | 'psicotecnico' | 'antecedentes_penales'
+    status: 'active',
+    inactiveReason: undefined
   });
+
+  const [disciplines, setDisciplines] = useState<Discipline[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
 
   useEffect(() => {
     if (volunteer) {
@@ -50,6 +67,44 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
     }
   }, [volunteer]);
 
+  useEffect(() => {
+    const fetchDisciplines = async () => {
+      const token = localStorage.getItem('token');
+      try {
+        const res = await axios.get(`${API_URL}/api/disciplines`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        setDisciplines(res.data.data);
+      } catch (error) {
+        console.error('❌ Error al obtener disciplinas:', error);
+      }
+    };
+
+    const fetchGroups = async () => {
+      const token = localStorage.getItem('token');
+      try {
+        const res = await axios.get(`${API_URL}/api/groups`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        console.log('✅ Grupos cargados:', res.data.data);
+        setGroups(res.data.data);
+      } catch (error) {
+        console.error('❌ Error al obtener grupos:', error);
+      }
+    };
+
+    fetchDisciplines();
+    fetchGroups();
+  }, []);
+
+  const availableGroups = groups.filter(
+    (group) => formData.discipline && group.discipline === formData.discipline
+  );
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const submitData = {
@@ -59,16 +114,11 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
     onSubmit(volunteer ? { ...submitData, id: volunteer.id } : submitData);
   };
 
-  // Get available groups for selected discipline
-  const availableGroups = mockGroups.filter(
-    group => formData.discipline && group.discipline === formData.discipline
-  );
-
   const handleGroupChange = (groupName: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       groups: prev.groups.includes(groupName)
-        ? prev.groups.filter(g => g !== groupName)
+        ? prev.groups.filter((g) => g !== groupName)
         : [...prev.groups, groupName],
       activeGroups: prev.groups.includes(groupName)
         ? prev.activeGroups - 1
@@ -77,7 +127,7 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
   };
 
   const handleStatusChange = (status: 'active' | 'inactive') => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       status,
       inactiveReason: status === 'active' ? undefined : prev.inactiveReason
@@ -100,78 +150,14 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-              Nombre Completo
-            </label>
-            <input
-              type="text"
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              required
-            />
-          </div>
+          {/* Datos personales */}
+          <InputField label="Nombre Completo" id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+          <InputField label="DNI" id="dni" value={formData.dni} type="text" pattern="[0-9]{8}" required title="DNI debe contener 8 números" onChange={(e) => setFormData({ ...formData, dni: e.target.value })} />
+          <InputField label="Fecha de Nacimiento" id="birthDate" value={formData.birthDate} type="date" onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })} />
+          <InputField label="Correo Electrónico" id="email" value={formData.email} type="email" onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+          <InputField label="Teléfono" id="phone" value={formData.phone} type="tel" onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
 
-          <div>
-            <label htmlFor="dni" className="block text-sm font-medium text-gray-700">
-              DNI
-            </label>
-            <input
-              type="text"
-              id="dni"
-              value={formData.dni}
-              onChange={(e) => setFormData({ ...formData, dni: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              required
-              pattern="[0-9]{8}"
-              title="DNI debe contener 8 números"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="birthDate" className="block text-sm font-medium text-gray-700">
-              Fecha de Nacimiento
-            </label>
-            <input
-              type="date"
-              id="birthDate"
-              value={formData.birthDate}
-              onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              required
-            />
-          </div>
-
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              Correo Electrónico
-            </label>
-            <input
-              type="email"
-              id="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              required
-            />
-          </div>
-
-          <div>
-            <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-              Teléfono
-            </label>
-            <input
-              type="tel"
-              id="phone"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              required
-            />
-          </div>
-
+          {/* Disciplina */}
           <div>
             <label htmlFor="discipline" className="block text-sm font-medium text-gray-700">
               Disciplina
@@ -179,19 +165,14 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
             <select
               id="discipline"
               value={formData.discipline}
-              onChange={(e) => {
-                setFormData({ 
-                  ...formData, 
-                  discipline: e.target.value,
-                  groups: [],
-                  activeGroups: 0
-                });
-              }}
+              onChange={(e) =>
+                setFormData({ ...formData, discipline: e.target.value, groups: [], activeGroups: 0 })
+              }
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               required
             >
               <option value="">Seleccionar disciplina</option>
-              {mockDisciplines.map(discipline => (
+              {disciplines.map((discipline) => (
                 <option key={discipline.id} value={discipline.name}>
                   {discipline.name}
                 </option>
@@ -199,13 +180,14 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
             </select>
           </div>
 
+          {/* Grupos según disciplina */}
           {formData.discipline && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Grupos Disponibles
               </label>
               <div className="space-y-2">
-                {availableGroups.map(group => (
+                {availableGroups.map((group) => (
                   <label key={group.id} className="flex items-center">
                     <input
                       type="checkbox"
@@ -222,6 +204,7 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
             </div>
           )}
 
+          {/* Estado */}
           <div>
             <label htmlFor="status" className="block text-sm font-medium text-gray-700">
               Estado
@@ -237,6 +220,7 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
             </select>
           </div>
 
+          {/* Motivo de inactividad */}
           {formData.status === 'inactive' && (
             <div>
               <label htmlFor="inactiveReason" className="block text-sm font-medium text-gray-700">
@@ -245,17 +229,20 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
               <select
                 id="inactiveReason"
                 value={formData.inactiveReason}
-                onChange={(e) => setFormData({ ...formData, inactiveReason: e.target.value as 'psicotecnico' | 'antecedentes_penales' })}
+                onChange={(e) =>
+                  setFormData({ ...formData, inactiveReason: e.target.value as 'psicotecnico' | 'antecedentes_penales' })
+                }
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 required
               >
                 <option value="">Seleccionar motivo</option>
                 <option value="psicotecnico">Psicotécnico</option>
-                <option value="antecedentes_penales">AP (Antecedentes Penales)</option>
+                <option value="antecedentes_penales">Antecedentes Penales</option>
               </select>
             </div>
           )}
 
+          {/* Botones */}
           <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"
@@ -273,6 +260,24 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// Componente auxiliar reutilizable para inputs
+function InputField({ label, id, value, onChange, ...props }: any) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700">
+        {label}
+      </label>
+      <input
+        id={id}
+        value={value}
+        onChange={onChange}
+        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+        {...props}
+      />
     </div>
   );
 }
