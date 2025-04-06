@@ -54,8 +54,15 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
 
   useEffect(() => {
     if (student) {
+      const formattedDate = student.birthDate
+        ? new Date(student.birthDate).toISOString().split('T')[0]
+        : '';
       setFormData({
-        ...student,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        dni: student.dni,
+        birthDate: formattedDate,
+        tutorId: student.tutorId,
         discipline: student.discipline || '',
         groupId: student.groupId || 0
       });
@@ -63,18 +70,13 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
   }, [student]);
 
   useEffect(() => {
-    const fetchDisciplinesAndGroups = async () => {
+    const fetchData = async () => {
       const token = localStorage.getItem('token');
       try {
         const [discRes, groupRes] = await Promise.all([
-          axios.get(`${API_URL}/api/disciplines`, {
-            headers: { Authorization: `Bearer ${token}` }
-          }),
-          axios.get(`${API_URL}/api/groups`, {
-            headers: { Authorization: `Bearer ${token}` }
-          }),
+          axios.get(`${API_URL}/api/disciplines`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_URL}/api/groups`, { headers: { Authorization: `Bearer ${token}` } }),
         ]);
-
         setDisciplines(discRes.data.data);
         setGroups(groupRes.data.data);
       } catch (error) {
@@ -82,7 +84,7 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
       }
     };
 
-    fetchDisciplinesAndGroups();
+    fetchData();
   }, []);
 
   const validateDNI = (dni: string) => {
@@ -107,8 +109,8 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
     onSubmit(student ? { ...submitData, id: student.id } : submitData);
   };
 
-  const availableGroups = groups.filter(
-    (group) => formData.discipline && group.discipline === formData.discipline
+  const availableGroups = groups.filter(group =>
+    formData.discipline && group.discipline === formData.discipline
   );
 
   const filteredTutors = mockTutors.filter(tutor =>
@@ -158,23 +160,32 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
             {dniError && <p className="mt-1 text-sm text-red-600">{dniError}</p>}
           </div>
 
-          <InputField label="Fecha de Nacimiento" id="birthDate" type="date" value={formData.birthDate} onChange={e => setFormData({ ...formData, birthDate: e.target.value })} />
+          <InputField
+            label="Fecha de Nacimiento"
+            id="birthDate"
+            type="date"
+            value={formData.birthDate}
+            onChange={e => setFormData({ ...formData, birthDate: e.target.value })}
+          />
 
           {/* Tutor */}
+        <div className="relative">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Tutor</label>
           <div className="relative">
-            <label className="block text-sm font-medium text-gray-700">Tutor</label>
-            <div className="mt-1 relative">
-              <input
-                type="text"
-                value={selectedTutor ? `${selectedTutor.name} (DNI: ${selectedTutor.dni})` : ''}
-                onClick={() => setShowTutorSearch(true)}
-                readOnly
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm cursor-pointer"
-                placeholder="Seleccionar tutor"
-                required
-              />
-              <Search className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" />
-            </div>
+          <input
+            type="text"
+            value={selectedTutor ? `${selectedTutor.name} (DNI: ${selectedTutor.dni})` : ''}
+            onClick={() => setShowTutorSearch(true)}
+            readOnly
+            className="block w-full pr-10 rounded-md border border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm cursor-pointer"
+            placeholder="Seleccionar tutor"
+            required
+        />
+    <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+      <Search className="h-5 w-5 text-gray-400" />
+    </div>
+  </div>
+
 
             {showTutorSearch && (
               <div className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200">
@@ -209,9 +220,7 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
 
           {/* Disciplina */}
           <div>
-            <label htmlFor="discipline" className="block text-sm font-medium text-gray-700">
-              Disciplina
-            </label>
+            <label htmlFor="discipline" className="block text-sm font-medium text-gray-700">Disciplina</label>
             <select
               id="discipline"
               value={formData.discipline}

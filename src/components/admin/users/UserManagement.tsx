@@ -19,40 +19,71 @@ export default function UserManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
-  // Traer usuarios desde backend
   useEffect(() => {
-    axios.get('/api/users')
-      .then(res => setUsers(res.data))
-      .catch(err => console.error('Error al obtener usuarios:', err));
+    const fetchUsers = async () => {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        console.warn('❗ No hay token en localStorage');
+        return;
+      }
+
+      try {
+        const res = await axios.get('/api/users', {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        console.log('✅ Usuarios cargados:', res.data.data);
+        setUsers(res.data.data);
+      } catch (err: any) {
+        console.error('❌ Error al obtener usuarios:', err);
+      }
+    };
+
+    fetchUsers();
   }, []);
 
   const handleAddUser = async (newUser: Omit<User, 'id'>) => {
+    const token = localStorage.getItem('token');
+
     try {
-      const res = await axios.post('/api/users', newUser);
-      setUsers([...users, res.data]);
+      const res = await axios.post('/api/users', newUser, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setUsers([...users, res.data.data]);
       setShowForm(false);
     } catch (err) {
-      console.error('Error al agregar usuario:', err);
+      console.error('❌ Error al agregar usuario:', err);
     }
   };
 
   const handleEditUser = async (updatedUser: User) => {
+    const token = localStorage.getItem('token');
+
     try {
-      await axios.put(`/api/users/${updatedUser.id}`, updatedUser);
-      setUsers(users.map(u => (u.id === updatedUser.id ? updatedUser : u)));
+      const res = await axios.put(`/api/users/${updatedUser.id}`, updatedUser, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const updated = res.data.data;
+      setUsers(users.map(u => (u.id === updated.id ? updated : u)));
       setShowForm(false);
       setSelectedUser(null);
     } catch (err) {
-      console.error('Error al editar usuario:', err);
+      console.error('❌ Error al editar usuario:', err);
     }
   };
 
   const handleDeleteUser = async (id: number) => {
+    const token = localStorage.getItem('token');
+
     try {
-      await axios.delete(`/api/users/${id}`);
+      await axios.delete(`/api/users/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setUsers(users.filter(u => u.id !== id));
     } catch (err) {
-      console.error('Error al eliminar usuario:', err);
+      console.error('❌ Error al eliminar usuario:', err);
     }
   };
 
@@ -77,7 +108,6 @@ export default function UserManagement() {
 
   return (
     <div className="space-y-6">
-      {/* Buscador y botón */}
       <div className="flex justify-between items-center">
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -103,7 +133,6 @@ export default function UserManagement() {
         </button>
       </div>
 
-      {/* Formulario */}
       {showForm && (
         <UserForm
           user={selectedUser}
@@ -115,7 +144,6 @@ export default function UserManagement() {
         />
       )}
 
-      {/* Tabla */}
       <div className="bg-white shadow overflow-hidden sm:rounded-lg">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">

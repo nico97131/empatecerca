@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { BookOpen, Users, GraduationCap, UserCheck } from 'lucide-react';
 import axios from 'axios';
 import { API_URL } from '../../config';
-import { mockStudents } from '../../data/mockStudents';
 import { mockVolunteers } from '../../data/mockVolunteers';
 
 interface Discipline {
@@ -21,9 +20,21 @@ interface Group {
   currentMembers: number;
 }
 
+interface Student {
+  id: number;
+  firstName: string;
+  lastName: string;
+  birthDate: string;
+  dni: string;
+  tutorId: number;
+  discipline?: string;
+  groupId?: number;
+}
+
 export default function DashboardStats() {
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
 
@@ -31,21 +42,26 @@ export default function DashboardStats() {
     const token = localStorage.getItem('token');
     const fetchData = async () => {
       try {
-        const [discRes, groupRes] = await Promise.all([
+        const [discRes, groupRes, studentRes] = await Promise.all([
           axios.get(`${API_URL}/api/disciplines`, {
             headers: { Authorization: `Bearer ${token}` }
           }),
           axios.get(`${API_URL}/api/groups`, {
             headers: { Authorization: `Bearer ${token}` }
           }),
+          axios.get(`${API_URL}/api/students`, {
+            headers: { Authorization: `Bearer ${token}` }
+          })
         ]);
 
         setDisciplines(discRes.data.data);
         setGroups(groupRes.data.data);
+        setStudents(studentRes.data.data);
         setLoading(false);
 
         console.log('📊 Disciplinas:', discRes.data.data);
         console.log('📊 Grupos:', groupRes.data.data);
+        console.log('📊 Alumnos:', studentRes.data.data);
       } catch (error: any) {
         console.error('❌ Error al obtener datos:', error.message);
         setApiError('Error al cargar estadísticas');
@@ -75,7 +91,7 @@ export default function DashboardStats() {
     },
     {
       label: 'Alumnos',
-      value: mockStudents.length,
+      value: students.length,
       icon: GraduationCap,
       description: 'Total de alumnos registrados',
       color: 'bg-purple-500',

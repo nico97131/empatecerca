@@ -13,6 +13,7 @@ import disciplineRoutes from './routes/discipline.routes.js';
 import groupRoutes from './routes/group.routes.js';
 import progressRoutes from './routes/progress.routes.js';
 import messageRoutes from './routes/message.routes.js';
+import studentRoutes from './routes/student.routes.js';
 
 // Load environment variables
 dotenv.config();
@@ -48,6 +49,7 @@ const startServer = async () => {
   app.use('/api/groups', groupRoutes);
   app.use('/api/progress', progressRoutes);
   app.use('/api/messages', messageRoutes);
+  app.use('/api/students', studentRoutes); 
 
   app.get('/', (req, res) => {
     res.json({ message: 'Welcome to EmpateCerca API' });

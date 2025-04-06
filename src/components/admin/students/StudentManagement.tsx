@@ -3,7 +3,6 @@ import { Plus, Search, Edit2, Trash2, FileText } from 'lucide-react';
 import StudentForm from './StudentForm';
 import MedicalRecordForm from './MedicalRecordForm';
 import { mockTutors } from '../../../data/mockTutors';
-import { mockStudents } from '../../../data/mockStudents';
 import axios from 'axios';
 import { API_URL } from '../../../config';
 
@@ -34,47 +33,74 @@ interface Group {
 }
 
 export default function StudentManagement() {
-  const [students, setStudents] = useState<Student[]>(mockStudents);
+  const [students, setStudents] = useState<Student[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [showMedicalForm, setShowMedicalForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
+  const token = localStorage.getItem('token');
+
   useEffect(() => {
-    const fetchGroups = async () => {
-      const token = localStorage.getItem('token');
+    const fetchData = async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/groups`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-        console.log('✅ Grupos cargados:', res.data.data);
-        setGroups(res.data.data);
+        const [studentsRes, groupsRes] = await Promise.all([
+          axios.get(`${API_URL}/api/students`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          axios.get(`${API_URL}/api/groups`, {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+        ]);
+
+        setStudents(studentsRes.data.data);
+        setGroups(groupsRes.data.data);
+        console.log('✅ Alumnos cargados:', studentsRes.data.data);
       } catch (error: any) {
-        console.error('❌ Error al obtener grupos:', error.message);
+        console.error('❌ Error al obtener datos:', error.response?.data || error.message);
       }
     };
 
-    fetchGroups();
+    fetchData();
   }, []);
 
-  const handleAddStudent = (newStudent: Omit<Student, 'id'>) => {
-    setStudents([...students, { ...newStudent, id: students.length + 1 }]);
-    setShowForm(false);
+  const handleAddStudent = async (newStudent: Omit<Student, 'id'>) => {
+    try {
+      const res = await axios.post(`${API_URL}/api/students`, newStudent, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setStudents([...students, res.data.data]);
+      setShowForm(false);
+    } catch (error: any) {
+      console.error('❌ Error al crear alumno:', error.response?.data || error.message);
+    }
   };
 
-  const handleEditStudent = (updatedStudent: Student) => {
-    setStudents(students.map(student =>
-      student.id === updatedStudent.id ? updatedStudent : student
-    ));
-    setSelectedStudent(null);
-    setShowForm(false);
+  const handleEditStudent = async (updatedStudent: Student) => {
+    try {
+      const res = await axios.put(`${API_URL}/api/students/${updatedStudent.id}`, updatedStudent, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setStudents(students.map(s =>
+        s.id === updatedStudent.id ? res.data.data : s
+      ));
+      setSelectedStudent(null);
+      setShowForm(false);
+    } catch (error: any) {
+      console.error('❌ Error al editar alumno:', error.response?.data || error.message);
+    }
   };
 
-  const handleDeleteStudent = (id: number) => {
-    setStudents(students.filter(student => student.id !== id));
+  const handleDeleteStudent = async (id: number) => {
+    try {
+      await axios.delete(`${API_URL}/api/students/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setStudents(students.filter(s => s.id !== id));
+    } catch (error: any) {
+      console.error('❌ Error al eliminar alumno:', error.response?.data || error.message);
+    }
   };
 
   const handleUpdateMedicalRecord = (studentId: number, medicalRecord: Student['medicalRecord']) => {
@@ -115,7 +141,7 @@ export default function StudentManagement() {
           <input
             type="text"
             placeholder="Buscar alumnos..."
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />

@@ -1,21 +1,39 @@
-import { useState } from 'react';
-import { Search, Calendar, Star, User, BookOpen } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Search, User, BookOpen } from 'lucide-react';
 import VolunteerRatings from './VolunteerRatings';
 import StudentProgress from './StudentProgress';
 import { mockProgress, mockRatings } from '../../../data/mockProgress';
-import { mockStudents } from '../../../data/mockStudents';
 import { mockVolunteers } from '../../../data/mockVolunteers';
 import { mockTutors } from '../../../data/mockTutors';
+import axios from 'axios';
+import { API_URL } from '../../../config';
 
 type ProgressView = 'volunteers' | 'students';
 
 export default function ProgressPanel() {
   const [activeView, setActiveView] = useState<ProgressView>('volunteers');
   const [searchTerm, setSearchTerm] = useState('');
+  const [students, setStudents] = useState<any[]>([]);
 
-  // Combine progress data with ratings
+  const token = localStorage.getItem('token');
+
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/students`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setStudents(res.data.data);
+      } catch (error: any) {
+        console.error('❌ Error al cargar alumnos desde API:', error.message);
+      }
+    };
+
+    fetchStudents();
+  }, []);
+
   const progressData = mockProgress.map(progress => {
-    const student = mockStudents.find(s => s.id === progress.studentId);
+    const student = students.find(s => s.id === progress.studentId);
     const volunteer = mockVolunteers.find(v => v.id === progress.volunteerId);
     const ratings = mockRatings.filter(r => r.volunteerId === progress.volunteerId);
     const averageRating = ratings.length > 0
@@ -30,7 +48,6 @@ export default function ProgressPanel() {
     };
   });
 
-  // Combine ratings data with tutor feedback
   const ratingsData = mockVolunteers.map(volunteer => {
     const ratings = mockRatings.filter(r => r.volunteerId === volunteer.id);
     const averageRating = ratings.length > 0
@@ -65,7 +82,7 @@ export default function ProgressPanel() {
           <input
             type="text"
             placeholder={`Buscar ${activeView === 'volunteers' ? 'voluntarios' : 'alumnos'}...`}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -97,12 +114,12 @@ export default function ProgressPanel() {
       </div>
 
       {activeView === 'volunteers' ? (
-        <VolunteerRatings 
+        <VolunteerRatings
           volunteers={ratingsData}
           searchTerm={searchTerm}
         />
       ) : (
-        <StudentProgress 
+        <StudentProgress
           progress={progressData}
           searchTerm={searchTerm}
         />

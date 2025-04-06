@@ -4,6 +4,7 @@ import VolunteerForm from './VolunteerForm';
 import ScheduleModal from './ScheduleModal';
 import axios from 'axios';
 import { mockVolunteers } from '../../../data/mockVolunteers';
+import { API_URL } from '../../../config';
 
 interface Volunteer {
   id: number;
@@ -17,7 +18,7 @@ interface Volunteer {
   activeGroups: number;
   status: 'active' | 'inactive';
   inactiveReason?: 'psicotecnico' | 'antecedentes_penales';
-  specialization?: string; // Para mapear con disciplina si existiera
+  specialization?: string;
 }
 
 interface Discipline {
@@ -36,13 +37,26 @@ export default function VolunteersManagement() {
   const [selectedVolunteer, setSelectedVolunteer] = useState<Volunteer | null>(null);
 
   useEffect(() => {
-    // 🚀 Traer disciplinas reales desde MySQL
     const fetchDisciplines = async () => {
+      const token = localStorage.getItem('token');
+      console.log('🔐 Token usado:', token);
+      console.log('🌐 API_URL:', API_URL);
+
+      if (!token) {
+        console.warn('⚠️ No hay token en localStorage');
+        return;
+      }
+
       try {
-        const res = await axios.get('http://localhost:5000/api/disciplines');
+        const res = await axios.get(`${API_URL}/api/disciplines`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        console.log('✅ Disciplinas obtenidas:', res.data.data);
         setDisciplines(res.data.data);
-      } catch (error) {
-        console.error('Error al obtener disciplinas:', error);
+      } catch (error: any) {
+        console.error('❌ Error al obtener disciplinas:', error);
       }
     };
 
@@ -50,13 +64,12 @@ export default function VolunteersManagement() {
   }, []);
 
   useEffect(() => {
-    // Mapear mockVolunteers con disciplinas reales por categoría
     const mapped = mockVolunteers.map((volunteer) => {
       const matched = disciplines.find(d => d.category === volunteer.specialization);
       return {
         ...volunteer,
         discipline: matched?.name || 'Sin asignar',
-        birthDate: volunteer.joinDate // si usás joinDate como mock
+        birthDate: volunteer.birthDate || volunteer.joinDate || '2000-01-01'
       };
     });
 
@@ -69,9 +82,7 @@ export default function VolunteersManagement() {
   };
 
   const handleEditVolunteer = (updatedVolunteer: Volunteer) => {
-    setVolunteers(volunteers.map(v =>
-      v.id === updatedVolunteer.id ? updatedVolunteer : v
-    ));
+    setVolunteers(volunteers.map(v => v.id === updatedVolunteer.id ? updatedVolunteer : v));
     setSelectedVolunteer(null);
     setShowForm(false);
   };
@@ -149,12 +160,12 @@ export default function VolunteersManagement() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Voluntario</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DNI</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Disciplina</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grupos Activos</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Voluntario</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">DNI</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Disciplina</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Grupos Activos</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Acciones</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -166,10 +177,10 @@ export default function VolunteersManagement() {
                     <div className="text-sm text-gray-500">{volunteer.email}</div>
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{volunteer.dni}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{volunteer.discipline}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{volunteer.activeGroups}</td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 text-sm text-gray-500">{volunteer.dni}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{volunteer.discipline}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{volunteer.activeGroups}</td>
+                <td className="px-6 py-4">
                   <div className="flex flex-col">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       volunteer.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -183,20 +194,20 @@ export default function VolunteersManagement() {
                     )}
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <td className="px-6 py-4 text-right text-sm font-medium space-x-2">
                   <button
                     onClick={() => {
                       setSelectedVolunteer(volunteer);
                       setShowSchedule(true);
                     }}
-                    className="text-gray-600 hover:text-gray-900 mr-4"
+                    className="text-gray-600 hover:text-gray-900"
                     title="Ver horario"
                   >
                     <Calendar className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => window.location.href = `mailto:${volunteer.email}`}
-                    className="text-blue-600 hover:text-blue-900 mr-4"
+                    className="text-blue-600 hover:text-blue-900"
                     title="Enviar correo"
                   >
                     <Mail className="h-4 w-4" />
@@ -206,7 +217,7 @@ export default function VolunteersManagement() {
                       setSelectedVolunteer(volunteer);
                       setShowForm(true);
                     }}
-                    className="text-indigo-600 hover:text-indigo-900 mr-4"
+                    className="text-indigo-600 hover:text-indigo-900"
                     title="Editar"
                   >
                     <Edit2 className="h-4 w-4" />

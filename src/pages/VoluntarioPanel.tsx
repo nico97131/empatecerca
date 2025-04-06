@@ -4,9 +4,35 @@ import { useAuth } from '../contexts/AuthContext';
 import MessagingPanel from '../components/voluntario/MessagingPanel';
 import StudentRating from '../components/voluntario/StudentRating';
 import MedicalRecord from '../components/voluntario/MedicalRecord';
-import { mockStudents } from '../data/mockStudents';
 import axios from 'axios';
 import { API_URL } from '../config';
+
+interface Student {
+  id: number;
+  firstName: string;
+  lastName: string;
+  birthDate: string;
+  dni: string;
+  tutorId: number;
+  discipline?: string;
+  groupId?: number;
+  medicalRecord?: {
+    diagnosis: string;
+    allergies: string[];
+    medications: string[];
+    observations: string;
+    lastUpdate: string;
+    volunteerNotes?: string;
+  };
+}
+
+interface Grupo {
+  id: number;
+  name: string;
+  discipline: string;
+  volunteerInCharge?: number;
+  schedule: string;
+}
 
 interface Alumno {
   id: number;
@@ -39,14 +65,6 @@ interface Alumno {
   discipline?: string;
 }
 
-interface Grupo {
-  id: number;
-  name: string;
-  discipline: string;
-  volunteerInCharge?: number;
-  schedule: string;
-}
-
 export default function VoluntarioPanel() {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'messages'>('overview');
@@ -54,64 +72,67 @@ export default function VoluntarioPanel() {
   const [showMedicalRecord, setShowMedicalRecord] = useState(false);
   const [showRatingForm, setShowRatingForm] = useState(false);
   const [groups, setGroups] = useState<Grupo[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
 
   useEffect(() => {
-    const fetchGroups = async () => {
+    const fetchData = async () => {
       const token = localStorage.getItem('token');
       try {
-        const res = await axios.get(`${API_URL}/api/groups`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        setGroups(res.data.data);
+        const [groupsRes, studentsRes] = await Promise.all([
+          axios.get(`${API_URL}/api/groups`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get(`${API_URL}/api/students`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+        setGroups(groupsRes.data.data);
+        setStudents(studentsRes.data.data);
       } catch (err) {
-        console.error('❌ Error al obtener grupos:', err);
+        console.error('❌ Error al obtener datos:', err);
       }
     };
 
-    fetchGroups();
+    fetchData();
   }, []);
 
-  const volunteerEmail = user?.email;
-  const assignedGroups = groups.filter(g => {
-    const volunteer = user?.id || null;
-    return g.volunteerInCharge === volunteer;
-  });
+  const volunteerId = user?.id || null;
+
+  const assignedGroups = groups.filter(group => group.volunteerInCharge === volunteerId);
 
   const groupStudents = assignedGroups.map(group => {
-    const students = mockStudents.filter(student => 
-      student.groupId === group.id
-    ).map(student => ({
-      id: student.id,
-      nombre: `${student.firstName} ${student.lastName}`,
-      edad: new Date().getFullYear() - new Date(student.birthDate).getFullYear(),
-      fichamedica: {
-        alergias: student.medicalRecord?.allergies || [],
-        medicamentos: student.medicalRecord?.medications || [],
-        condiciones: student.medicalRecord?.diagnosis ? [student.medicalRecord.diagnosis] : [],
-        observaciones: student.medicalRecord?.observations || '',
-        ultimaActualizacion: student.medicalRecord?.lastUpdate || '',
-        grupoSanguineo: 'O+',
-        contactoEmergencia: {
-          nombre: 'Ana Martínez',
-          telefono: '123-456-7890',
-          relacion: 'Madre'
-        }
-      },
-      tutor: {
-        nombre: 'María González',
-        email: 'maria.gonzalez@empate.org'
-      },
-      grupo: group.name,
-      discipline: group.discipline
-    }));
+    const alumnos: Alumno[] = students
+      .filter(s => s.groupId === group.id)
+      .map(s => ({
+        id: s.id,
+        nombre: `${s.firstName} ${s.lastName}`,
+        edad: new Date().getFullYear() - new Date(s.birthDate).getFullYear(),
+        fichamedica: {
+          alergias: s.medicalRecord?.allergies || [],
+          medicamentos: s.medicalRecord?.medications || [],
+          condiciones: s.medicalRecord?.diagnosis ? [s.medicalRecord.diagnosis] : [],
+          observaciones: s.medicalRecord?.observations || '',
+          ultimaActualizacion: s.medicalRecord?.lastUpdate || '',
+          grupoSanguineo: 'O+',
+          contactoEmergencia: {
+            nombre: 'Ana Martínez',
+            telefono: '123-456-7890',
+            relacion: 'Madre',
+          },
+        },
+        tutor: {
+          nombre: 'María González',
+          email: 'maria.gonzalez@empate.org',
+        },
+        grupo: group.name,
+        discipline: group.discipline,
+      }));
 
     return {
       id: group.id,
       nombre: group.name,
       materia: group.discipline,
-      alumnos: students
+      alumnos,
     };
   });
 
@@ -119,7 +140,10 @@ export default function VoluntarioPanel() {
     console.log('Sending message:', message);
   };
 
-  const handleRateStudent = (studentId: number, rating: { score: number; feedback: string; attendance: boolean }) => {
+  const handleRateStudent = (
+    studentId: number,
+    rating: { score: number; feedback: string; attendance: boolean }
+  ) => {
     console.log('Rating student:', studentId, rating);
     setShowRatingForm(false);
   };
@@ -151,29 +175,31 @@ export default function VoluntarioPanel() {
           <nav className="-mb-px flex space-x-8">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`
-                group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm
-                ${activeTab === 'overview'
+              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${
+                activeTab === 'overview'
                   ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
-              `}
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
             >
               <Users className={`-ml-0.5 mr-2 h-5 w-5 ${
-                activeTab === 'overview' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'
+                activeTab === 'overview'
+                  ? 'text-indigo-500'
+                  : 'text-gray-400 group-hover:text-gray-500'
               }`} />
               Grupos y Alumnos
             </button>
             <button
               onClick={() => setActiveTab('messages')}
-              className={`
-                group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm
-                ${activeTab === 'messages'
+              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${
+                activeTab === 'messages'
                   ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
-              `}
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
             >
               <MessageSquare className={`-ml-0.5 mr-2 h-5 w-5 ${
-                activeTab === 'messages' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'
+                activeTab === 'messages'
+                  ? 'text-indigo-500'
+                  : 'text-gray-400 group-hover:text-gray-500'
               }`} />
               Mensajes
             </button>

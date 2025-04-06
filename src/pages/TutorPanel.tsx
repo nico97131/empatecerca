@@ -1,12 +1,31 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { User, TrendingUp, LogOut, Calendar, MessageSquare, FileText } from 'lucide-react';
+import { User, TrendingUp, LogOut, MessageSquare, FileText } from 'lucide-react';
 import MessagingPanel from '../components/tutor/MessagingPanel';
 import ProgressHistory from '../components/tutor/ProgressHistory';
 import MedicalRecordForm from '../components/tutor/MedicalRecordForm';
-import { mockStudents } from '../data/mockStudents';
 import axios from 'axios';
 import { API_URL } from '../config';
+import { mockVolunteers } from '../data/mockVolunteers';
+
+interface Student {
+  id: number;
+  firstName: string;
+  lastName: string;
+  birthDate: string;
+  dni: string;
+  tutorId: number;
+  discipline?: string;
+  groupId?: number;
+  medicalRecord?: {
+    diagnosis: string;
+    allergies: string[];
+    medications: string[];
+    observations: string;
+    lastUpdate: string;
+    volunteerNotes?: string;
+  };
+}
 
 interface Alumno {
   id: number;
@@ -49,67 +68,73 @@ interface Group {
 
 export default function TutorPanel() {
   const { user, logout } = useAuth();
+  const [students, setStudents] = useState<Student[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'messages'>('overview');
   const [selectedAlumno, setSelectedAlumno] = useState<Alumno | null>(null);
   const [showProgress, setShowProgress] = useState(false);
   const [showMedicalRecord, setShowMedicalRecord] = useState(false);
-  const [groups, setGroups] = useState<Group[]>([]);
 
   useEffect(() => {
-    const fetchGroups = async () => {
+    const fetchData = async () => {
       const token = localStorage.getItem('token');
       try {
-        const res = await axios.get(`${API_URL}/api/groups`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        setGroups(res.data.data);
+        const [studentsRes, groupsRes] = await Promise.all([
+          axios.get(`${API_URL}/api/students`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          axios.get(`${API_URL}/api/groups`, {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+        ]);
+        setStudents(studentsRes.data.data);
+        setGroups(groupsRes.data.data);
       } catch (error) {
-        console.error('❌ Error al obtener grupos:', error);
+        console.error('❌ Error al obtener datos:', error);
       }
     };
-
-    fetchGroups();
+    fetchData();
   }, []);
 
-  const myStudents = mockStudents.filter(student => {
-    const tutor = user?.email && user.email.split('@')[0];
-    const studentTutor = student.tutorId === 1 ? 'maria.gonzalez' : 'juan.perez';
-    return tutor === studentTutor;
-  }).map(student => ({
-    id: student.id,
-    nombre: `${student.firstName} ${student.lastName}`,
-    progreso: [
-      {
-        fecha: '2024-03-15',
-        asistencia: true,
-        desempeño: 'Excelente',
-        actividades: ['Práctica deportiva', 'Ejercicios de respiración'],
-        notas: 'Excelente manejo de su condición durante la actividad'
-      }
-    ],
-    voluntario: {
-      nombre: 'Carlos Rodríguez',
-      email: 'carlos@empate.org',
-      rating: 4.5
-    },
-    fichamedica: {
-      alergias: student.medicalRecord?.allergies || [],
-      medicamentos: student.medicalRecord?.medications || [],
-      condiciones: [student.medicalRecord?.diagnosis || ''],
-      observaciones: student.medicalRecord?.observations || '',
-      ultimaActualizacion: student.medicalRecord?.lastUpdate || '',
-      grupoSanguineo: 'O+',
-      contactoEmergencia: {
-        nombre: 'Ana Martínez',
-        telefono: '123-456-7890',
-        relacion: 'Madre'
-      }
-    },
-    discipline: student.discipline,
-    groupId: student.groupId
-  }));
+  const myStudents: Alumno[] = students
+    .filter(student => {
+      const tutorPrefix = user?.email?.split('@')[0];
+      const studentTutor = student.tutorId === 1 ? 'maria.gonzalez' : 'juan.perez';
+      return tutorPrefix === studentTutor;
+    })
+    .map(student => ({
+      id: student.id,
+      nombre: `${student.firstName} ${student.lastName}`,
+      progreso: [
+        {
+          fecha: '2024-03-15',
+          asistencia: true,
+          desempeño: 'Excelente',
+          actividades: ['Práctica deportiva', 'Ejercicios de respiración'],
+          notas: 'Excelente manejo de su condición durante la actividad'
+        }
+      ],
+      voluntario: {
+        nombre: mockVolunteers[0]?.name || 'Voluntario Asignado',
+        email: mockVolunteers[0]?.email || 'voluntario@empate.org',
+        rating: mockVolunteers[0]?.rating || 4.5
+      },
+      fichamedica: {
+        alergias: student.medicalRecord?.allergies || [],
+        medicamentos: student.medicalRecord?.medications || [],
+        condiciones: [student.medicalRecord?.diagnosis || ''],
+        observaciones: student.medicalRecord?.observations || '',
+        ultimaActualizacion: student.medicalRecord?.lastUpdate || '',
+        grupoSanguineo: 'O+',
+        contactoEmergencia: {
+          nombre: 'Ana Martínez',
+          telefono: '123-456-7890',
+          relacion: 'Madre'
+        }
+      },
+      discipline: student.discipline,
+      groupId: student.groupId
+    }));
 
   const handleSendMessage = (message: any) => {
     console.log('Sending message:', message);
@@ -157,11 +182,11 @@ export default function TutorPanel() {
           <nav className="-mb-px flex space-x-8">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm
-                ${activeTab === 'overview'
+              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${
+                activeTab === 'overview'
                   ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
-              `}
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
             >
               <User className={`-ml-0.5 mr-2 h-5 w-5 ${
                 activeTab === 'overview' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'
@@ -170,11 +195,11 @@ export default function TutorPanel() {
             </button>
             <button
               onClick={() => setActiveTab('messages')}
-              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm
-                ${activeTab === 'messages'
+              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${
+                activeTab === 'messages'
                   ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
-              `}
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
             >
               <MessageSquare className={`-ml-0.5 mr-2 h-5 w-5 ${
                 activeTab === 'messages' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'

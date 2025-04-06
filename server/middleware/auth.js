@@ -12,7 +12,7 @@ export const protect = async (req, res, next) => {
 
       // Buscar usuario en la base de datos por ID
       const [rows] = await db.execute(
-        'SELECT id, name, email, role FROM usuarios WHERE id = ?',
+        'SELECT id, name, email, role FROM users WHERE id = ?',
         [decoded.id]
       );
 

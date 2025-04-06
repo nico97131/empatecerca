@@ -28,7 +28,7 @@ export const login = async (req, res) => {
     console.log('🔐 Password recibido:', password);
 
     const [rows] = await db.execute(
-      'SELECT * FROM usuarios WHERE email = ?',
+      'SELECT * FROM users WHERE email = ?',
       [email]
     );
 
@@ -75,7 +75,7 @@ export const login = async (req, res) => {
 export const getMe = async (req, res) => {
   try {
     const [rows] = await db.execute(
-      'SELECT id, name, email, role, dni FROM usuarios WHERE id = ?',
+      'SELECT id, name, email, role, dni FROM users WHERE id = ?',
       [req.user.id]
     );
 
@@ -105,7 +105,7 @@ export const updatePassword = async (req, res) => {
     const { currentPassword, newPassword } = req.body;
 
     const [rows] = await db.execute(
-      'SELECT * FROM usuarios WHERE id = ?',
+      'SELECT * FROM users WHERE id = ?',
       [req.user.id]
     );
 
@@ -123,7 +123,7 @@ export const updatePassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     await db.execute(
-      'UPDATE usuarios SET password = ? WHERE id = ?',
+      'UPDATE users SET password = ? WHERE id = ?',
       [hashedPassword, req.user.id]
     );
 
