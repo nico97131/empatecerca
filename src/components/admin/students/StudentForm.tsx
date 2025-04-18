@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Search } from 'lucide-react';
 import axios from 'axios';
-import { mockTutors } from '../../../data/mockTutors';
 import { API_URL } from '../../../config';
 
 interface Student {
@@ -15,6 +14,15 @@ interface Student {
   groupId?: number;
 }
 
+interface Tutor {
+  id: number;
+  name: string;
+  dni: string;
+  email: string;
+  phone: string;
+  joinDate: string;
+}
+
 interface Discipline {
   id: number;
   name: string;
@@ -25,8 +33,7 @@ interface Discipline {
 interface Group {
   id: number;
   name: string;
-  discipline: string;
-  schedule: string;
+  discipline_id: number | null;
 }
 
 interface StudentFormProps {
@@ -42,50 +49,54 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
     dni: '',
     birthDate: '',
     tutorId: 0,
-    discipline: '',
+    discipline: 0,
     groupId: 0
   });
 
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [tutors, setTutors] = useState<Tutor[]>([]);
   const [tutorSearchTerm, setTutorSearchTerm] = useState('');
   const [dniError, setDniError] = useState('');
   const [showTutorSearch, setShowTutorSearch] = useState(false);
 
   useEffect(() => {
-    if (student) {
-      const formattedDate = student.birthDate
-        ? new Date(student.birthDate).toISOString().split('T')[0]
-        : '';
-      setFormData({
-        firstName: student.firstName,
-        lastName: student.lastName,
-        dni: student.dni,
-        birthDate: formattedDate,
-        tutorId: student.tutorId,
-        discipline: student.discipline || '',
-        groupId: student.groupId || 0
-      });
-    }
-  }, [student]);
-
-  useEffect(() => {
     const fetchData = async () => {
       const token = localStorage.getItem('token');
       try {
-        const [discRes, groupRes] = await Promise.all([
+        const [discRes, groupRes, tutorRes] = await Promise.all([
           axios.get(`${API_URL}/api/disciplines`, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_URL}/api/groups`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_URL}/api/tutors`, { headers: { Authorization: `Bearer ${token}` } }),
         ]);
         setDisciplines(discRes.data.data);
         setGroups(groupRes.data.data);
+        setTutors(tutorRes.data.data);
+
+        if (student) {
+          const matchedDiscipline = discRes.data.data.find((d: Discipline) => d.name === student.discipline);
+          const disciplineId = matchedDiscipline?.id || 0;
+          const formattedDate = student.birthDate
+            ? new Date(student.birthDate).toISOString().split('T')[0]
+            : '';
+
+          setFormData({
+            firstName: student.firstName,
+            lastName: student.lastName,
+            dni: student.dni,
+            birthDate: formattedDate,
+            tutorId: student.tutorId,
+            discipline: disciplineId,
+            groupId: student.groupId || 0
+          });
+        }
       } catch (error) {
-        console.error('❌ Error al obtener disciplinas o grupos:', error);
+        console.error('❌ Error al obtener disciplinas, grupos o tutores:', error);
       }
     };
 
     fetchData();
-  }, []);
+  }, [student]);
 
   const validateDNI = (dni: string) => {
     const dniRegex = /^[0-9]{8}$/;
@@ -110,17 +121,17 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
   };
 
   const availableGroups = groups.filter(group =>
-    formData.discipline && group.discipline === formData.discipline
+    formData.discipline && group.discipline_id === formData.discipline
   );
 
-  const filteredTutors = mockTutors.filter(tutor =>
+  const filteredTutors = tutors.filter(tutor =>
     tutorSearchTerm
       ? tutor.name.toLowerCase().includes(tutorSearchTerm.toLowerCase()) ||
         tutor.dni.includes(tutorSearchTerm)
       : true
   );
 
-  const selectedTutor = mockTutors.find(t => t.id === formData.tutorId);
+  const selectedTutor = tutors.find(t => t.id === formData.tutorId);
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
@@ -168,24 +179,22 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
             onChange={e => setFormData({ ...formData, birthDate: e.target.value })}
           />
 
-          {/* Tutor */}
-        <div className="relative">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Tutor</label>
           <div className="relative">
-          <input
-            type="text"
-            value={selectedTutor ? `${selectedTutor.name} (DNI: ${selectedTutor.dni})` : ''}
-            onClick={() => setShowTutorSearch(true)}
-            readOnly
-            className="block w-full pr-10 rounded-md border border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm cursor-pointer"
-            placeholder="Seleccionar tutor"
-            required
-        />
-    <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-      <Search className="h-5 w-5 text-gray-400" />
-    </div>
-  </div>
-
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tutor</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={selectedTutor ? `${selectedTutor.name} (DNI: ${selectedTutor.dni})` : ''}
+                onClick={() => setShowTutorSearch(true)}
+                readOnly
+                className="block w-full pr-10 rounded-md border border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm cursor-pointer"
+                placeholder="Seleccionar tutor"
+                required
+              />
+              <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
 
             {showTutorSearch && (
               <div className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200">
@@ -218,24 +227,22 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
             )}
           </div>
 
-          {/* Disciplina */}
           <div>
             <label htmlFor="discipline" className="block text-sm font-medium text-gray-700">Disciplina</label>
             <select
               id="discipline"
               value={formData.discipline}
-              onChange={(e) => setFormData({ ...formData, discipline: e.target.value, groupId: 0 })}
+              onChange={(e) => setFormData({ ...formData, discipline: Number(e.target.value), groupId: 0 })}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             >
-              <option value="">Seleccionar disciplina</option>
+              <option value={0}>Seleccionar disciplina</option>
               {disciplines.map(d => (
-                <option key={d.id} value={d.name}>{d.name}</option>
+                <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
           </div>
 
-          {/* Grupo */}
-          {formData.discipline && (
+          {formData.discipline !== 0 && (
             <div>
               <label htmlFor="groupId" className="block text-sm font-medium text-gray-700">Grupo</label>
               <select
@@ -244,17 +251,18 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
                 onChange={(e) => setFormData({ ...formData, groupId: Number(e.target.value) })}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               >
-                <option value="0">Sin asignación</option>
-                {availableGroups.map(group => (
-                  <option key={group.id} value={group.id}>
-                    {group.name} - {group.schedule}
-                  </option>
-                ))}
+                <option value={0}>Sin asignación</option>
+                {groups
+                  .filter(group => group.discipline_id === formData.discipline)
+                  .map(group => (
+                    <option key={group.id} value={group.id}>
+                      {disciplines.find(d => d.id === group.discipline_id)?.name || 'Disciplina'} - {group.name}
+                    </option>
+                  ))}
               </select>
             </div>
           )}
 
-          {/* Botones */}
           <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"

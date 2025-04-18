@@ -3,11 +3,11 @@ import { Plus, Search, Edit2, Trash2, Calendar, Mail } from 'lucide-react';
 import VolunteerForm from './VolunteerForm';
 import ScheduleModal from './ScheduleModal';
 import axios from 'axios';
-import { mockVolunteers } from '../../../data/mockVolunteers';
+import { toast } from 'react-hot-toast';
 import { API_URL } from '../../../config';
 
 interface Volunteer {
-  id: number;
+  id?: number;
   name: string;
   email: string;
   phone: string;
@@ -19,6 +19,7 @@ interface Volunteer {
   status: 'active' | 'inactive';
   inactiveReason?: 'psicotecnico' | 'antecedentes_penales';
   specialization?: string;
+  groups?: string[];
 }
 
 interface Discipline {
@@ -36,71 +37,104 @@ export default function VolunteersManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVolunteer, setSelectedVolunteer] = useState<Volunteer | null>(null);
 
+  const fetchVolunteers = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await axios.get(`${API_URL}/api/volunteers`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const rawVolunteers = res.data.data;
+
+      const mapped = rawVolunteers.map((volunteer: any) => {
+        const matched = disciplines.find(d => d.id === volunteer.discipline_id);
+        return {
+          ...volunteer,
+          name: volunteer.name,
+          email: volunteer.email,
+          phone: volunteer.phone,
+          dni: volunteer.dni,
+          birthDate: volunteer.join_date,
+          discipline: matched?.name || 'Sin asignar',
+          specialization: matched?.category || '',
+          availability: [],
+          groups: []
+        };
+      });
+
+      setVolunteers(mapped);
+    } catch (error: any) {
+      console.error('❌ Error al obtener voluntarios:', error);
+    }
+  };
+
   useEffect(() => {
     const fetchDisciplines = async () => {
       const token = localStorage.getItem('token');
-      console.log('🔐 Token usado:', token);
-      console.log('🌐 API_URL:', API_URL);
-
-      if (!token) {
-        console.warn('⚠️ No hay token en localStorage');
-        return;
-      }
-
       try {
         const res = await axios.get(`${API_URL}/api/disciplines`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+          headers: { Authorization: `Bearer ${token}` }
         });
-        console.log('✅ Disciplinas obtenidas:', res.data.data);
         setDisciplines(res.data.data);
       } catch (error: any) {
         console.error('❌ Error al obtener disciplinas:', error);
       }
     };
-
     fetchDisciplines();
   }, []);
 
   useEffect(() => {
-    const mapped = mockVolunteers.map((volunteer) => {
-      const matched = disciplines.find(d => d.category === volunteer.specialization);
-      return {
-        ...volunteer,
-        discipline: matched?.name || 'Sin asignar',
-        birthDate: volunteer.birthDate || volunteer.joinDate || '2000-01-01'
-      };
-    });
-
-    setVolunteers(mapped);
+    if (disciplines.length > 0) fetchVolunteers();
   }, [disciplines]);
 
-  const handleAddVolunteer = (newVolunteer: Omit<Volunteer, 'id'>) => {
-    setVolunteers([...volunteers, { ...newVolunteer, id: volunteers.length + 1 }]);
-    setShowForm(false);
-  };
-
-  const handleEditVolunteer = (updatedVolunteer: Volunteer) => {
-    setVolunteers(volunteers.map(v => v.id === updatedVolunteer.id ? updatedVolunteer : v));
-    setSelectedVolunteer(null);
-    setShowForm(false);
-  };
-
-  const handleDeleteVolunteer = (id: number) => {
-    setVolunteers(volunteers.filter(v => v.id !== id));
-  };
-
-  const getInactiveReasonLabel = (reason?: 'psicotecnico' | 'antecedentes_penales') => {
-    switch (reason) {
-      case 'psicotecnico':
-        return 'Psicotécnico';
-      case 'antecedentes_penales':
-        return 'AP';
-      default:
-        return '';
+  const handleAddVolunteer = async (newVolunteer: Volunteer) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_URL}/api/volunteers`, newVolunteer, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      await fetchVolunteers();
+      toast.success('Voluntario creado exitosamente');
+      setShowForm(false);
+    } catch (error: any) {
+      const message = error?.response?.data?.message || 'Error al crear voluntario';
+      toast.error(message);
+      console.error('❌ Error al crear voluntario:', error);
     }
   };
+  
+
+  const handleEditVolunteer = async (updatedVolunteer: Volunteer) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_URL}/api/volunteers/${updatedVolunteer.id}`, updatedVolunteer, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      await fetchVolunteers();
+      toast.success('Voluntario actualizado correctamente');
+      setShowForm(false);
+      setSelectedVolunteer(null);
+    } catch (error: any) {
+      const message = error?.response?.data?.message || 'Error al editar voluntario';
+      toast.error(message);
+      console.error('❌ Error al editar voluntario:', error);
+    }
+  };
+  
+
+  const handleDeleteVolunteer = async (id: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API_URL}/api/volunteers/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      await fetchVolunteers();
+      toast.success('Voluntario eliminado');
+    } catch (error) {
+      toast.error('Error al eliminar voluntario');
+      console.error('❌ Error al eliminar voluntario:', error);
+    }
+  };
+  
 
   const filteredVolunteers = volunteers.filter((v) =>
     v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -163,9 +197,8 @@ export default function VolunteersManagement() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Voluntario</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">DNI</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Disciplina</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Grupos Activos</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Acciones</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Acciones</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -179,20 +212,12 @@ export default function VolunteersManagement() {
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-500">{volunteer.dni}</td>
                 <td className="px-6 py-4 text-sm text-gray-500">{volunteer.discipline}</td>
-                <td className="px-6 py-4 text-sm text-gray-500">{volunteer.activeGroups}</td>
                 <td className="px-6 py-4">
-                  <div className="flex flex-col">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      volunteer.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
-                      {volunteer.status === 'active' ? 'Activo' : 'Inactivo'}
-                    </span>
-                    {volunteer.status === 'inactive' && volunteer.inactiveReason && (
-                      <span className="mt-1 text-xs text-gray-500">
-                        Motivo: {getInactiveReasonLabel(volunteer.inactiveReason)}
-                      </span>
-                    )}
-                  </div>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    volunteer.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  }`}>
+                    {volunteer.status === 'active' ? 'Activo' : 'Inactivo'}
+                  </span>
                 </td>
                 <td className="px-6 py-4 text-right text-sm font-medium space-x-2">
                   <button
@@ -223,7 +248,7 @@ export default function VolunteersManagement() {
                     <Edit2 className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => handleDeleteVolunteer(volunteer.id)}
+                    onClick={() => handleDeleteVolunteer(volunteer.id!)}
                     className="text-red-600 hover:text-red-900"
                     title="Eliminar"
                   >

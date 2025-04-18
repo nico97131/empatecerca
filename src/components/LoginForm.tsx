@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { LogIn, AlertCircle } from 'lucide-react';
@@ -18,10 +18,15 @@ export default function LoginForm() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
 
   const validateForm = () => {
     if (!credentials.email) {
       setError('El correo electrónico es requerido');
+      return false;
+    }
+    if (!/\S+@\S+\.\S+/.test(credentials.email)) {
+      setError('El correo electrónico no es válido');
       return false;
     }
     if (!credentials.password) {
@@ -38,60 +43,88 @@ export default function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+
     if (!validateForm()) return;
-    
+
     setIsLoading(true);
-    
+
     try {
       const user = await login(credentials);
-      
+      console.log('🧾 Usuario recibido tras login:', user);
+
+      const role = typeof user.role === 'string'
+        ? user.role.toLowerCase()
+        : String(user.role);
+
       const routes: Record<string, string> = {
         admin: '/admin/dashboard',
         voluntario: '/voluntario/panel',
         tutor: '/tutor/panel',
       };
-      
-      const route = routes[user.role];
+
+      const route = routes[role];
+      console.log('🧭 Rol:', role);
+      console.log('🎯 Ruta encontrada:', route);
+
       if (route) {
-        navigate(route);
+        if (rememberMe) {
+          localStorage.setItem('rememberedEmail', credentials.email);
+        } else {
+          localStorage.removeItem('rememberedEmail');
+        }
+
         toast.success('¡Bienvenido!');
+        window.location.href = route;
       } else {
-        setError('Rol de usuario no válido');
+        setError('Tu rol no tiene acceso definido');
+        toast.error('Acceso no disponible para tu rol');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error al iniciar sesión';
       setError(message);
       toast.error(message);
+      console.error('❌ Error en login:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('rememberedEmail');
+    if (savedEmail) {
+      setCredentials(prev => ({ ...prev, email: savedEmail }));
+      setRememberMe(true);
+    }
+  }, []);
+
+  const handleForgotPassword = () => {
+    toast('Funcionalidad de recuperación de contraseña próximamente disponible.');
+  };
+
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4">
-      {/* Background Image */}
-      <div 
-        className="absolute inset-0 z-0"
-        style={{
-          backgroundImage: 'url(https://raw.githubusercontent.com/nicolasf10/empate/main/images/background.jpg)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat'
-        }}
-      >
-        {/* Overlay */}
-        <div className="absolute inset-0 bg-green-900/70 backdrop-blur-sm"></div>
+      <div className="absolute inset-0 z-0">
+        <div
+          className="w-full h-full"
+          style={{
+            backgroundImage: `linear-gradient(rgba(255,255,255,0.3), rgba(255,255,255,0.2)), url(/images/fondo-login.jpeg)`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          }}
+        ></div>
       </div>
 
       <div className="max-w-md w-full bg-white/95 backdrop-blur-md rounded-xl shadow-lg p-8 space-y-6 relative z-10">
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
-            <LogIn className="w-8 h-8 text-green-600" />
-          </div>
-          <h2 className="text-3xl font-bold text-gray-900">Bienvenido a EmpateCerca</h2>
-          <p className="mt-2 text-gray-600">Ingresa tus credenciales para continuar</p>
-        </div>
+      <div className="text-center">
+  <img
+    src="/images/empatecerca.png"
+    alt="EmpateCerca"
+    className="mx-auto w-36 sm:w-40 mb-4"
+  />
+
+</div>
+
 
         {error && (
           <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">
@@ -137,6 +170,21 @@ export default function LoginForm() {
               required
               disabled={isLoading}
             />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 text-green-600 border-gray-300 rounded"
+              />
+              <span className="text-sm text-gray-600">Recordarme</span>
+            </label>
+            <button type="button" onClick={handleForgotPassword} className="text-sm text-green-600 hover:underline">
+              ¿Olvidaste tu contraseña?
+            </button>
           </div>
 
           <button

@@ -7,8 +7,10 @@ import {
   updateVolunteer,
   deleteVolunteer,
   updateAvailability,
-  getVolunteerGroups
+  updateVolunteerStatus,
+  getVolunteerGroups, // ← esta línea
 } from '../controllers/volunteer.controller.js';
+
 
 const router = express.Router();
 

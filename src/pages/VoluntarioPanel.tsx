@@ -88,6 +88,7 @@ export default function VoluntarioPanel() {
         ]);
         setGroups(groupsRes.data.data);
         setStudents(studentsRes.data.data);
+        console.log("Students con fechas de nacimiento:", studentsRes.data.data.map((s: Student) => ({ id: s.id, birthDate: s.birthDate })));
       } catch (err) {
         console.error('❌ Error al obtener datos:', err);
       }
@@ -96,37 +97,57 @@ export default function VoluntarioPanel() {
     fetchData();
   }, []);
 
-  const volunteerId = user?.id || null;
+  if (!user) {
+    return <div className="text-center mt-10">Cargando usuario...</div>;
+  }
 
+  const volunteerId = user.id;
   const assignedGroups = groups.filter(group => group.volunteerInCharge === volunteerId);
+
+  const calcularEdad = (birthDateStr: string): number => {
+    const birthDate = new Date(birthDateStr);
+    if (isNaN(birthDate.getTime())) return 0;
+
+    const today = new Date();
+    let edad = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      edad--;
+    }
+
+    return edad;
+  };
+
+  const mapStudentToAlumno = (s: Student, group: Grupo): Alumno => ({
+    id: s.id,
+    nombre: `${s.firstName} ${s.lastName}`,
+    edad: calcularEdad(s.birthDate),
+    fichamedica: {
+      alergias: s.medicalRecord?.allergies || [],
+      medicamentos: s.medicalRecord?.medications || [],
+      condiciones: s.medicalRecord?.diagnosis ? [s.medicalRecord.diagnosis] : [],
+      observaciones: s.medicalRecord?.observations || '',
+      ultimaActualizacion: s.medicalRecord?.lastUpdate || '',
+      grupoSanguineo: 'O+',
+      contactoEmergencia: {
+        nombre: 'Ana Martínez',
+        telefono: '123-456-7890',
+        relacion: 'Madre',
+      },
+    },
+    tutor: {
+      nombre: 'María González',
+      email: 'maria.gonzalez@empate.org',
+    },
+    grupo: group.name,
+    discipline: group.discipline,
+  });
 
   const groupStudents = assignedGroups.map(group => {
     const alumnos: Alumno[] = students
       .filter(s => s.groupId === group.id)
-      .map(s => ({
-        id: s.id,
-        nombre: `${s.firstName} ${s.lastName}`,
-        edad: new Date().getFullYear() - new Date(s.birthDate).getFullYear(),
-        fichamedica: {
-          alergias: s.medicalRecord?.allergies || [],
-          medicamentos: s.medicalRecord?.medications || [],
-          condiciones: s.medicalRecord?.diagnosis ? [s.medicalRecord.diagnosis] : [],
-          observaciones: s.medicalRecord?.observations || '',
-          ultimaActualizacion: s.medicalRecord?.lastUpdate || '',
-          grupoSanguineo: 'O+',
-          contactoEmergencia: {
-            nombre: 'Ana Martínez',
-            telefono: '123-456-7890',
-            relacion: 'Madre',
-          },
-        },
-        tutor: {
-          nombre: 'María González',
-          email: 'maria.gonzalez@empate.org',
-        },
-        grupo: group.name,
-        discipline: group.discipline,
-      }));
+      .map(s => mapStudentToAlumno(s, group));
 
     return {
       id: group.id,
@@ -157,7 +178,7 @@ export default function VoluntarioPanel() {
               <h1 className="text-2xl font-bold text-gray-900">Panel de Voluntario</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-gray-700">Bienvenido, {user?.name}</span>
+              <span className="text-gray-700">Bienvenido, {user.name}</span>
               <button
                 onClick={logout}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
@@ -207,65 +228,73 @@ export default function VoluntarioPanel() {
         </div>
 
         {activeTab === 'overview' ? (
-          <div className="space-y-6">
-            {groupStudents.map((grupo) => (
-              <div key={grupo.id} className="bg-white shadow overflow-hidden sm:rounded-lg">
-                <div className="px-4 py-5 sm:px-6">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h3 className="text-lg leading-6 font-medium text-gray-900">
-                        {grupo.nombre}
-                      </h3>
-                      <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                        {grupo.materia}
-                      </p>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="bg-indigo-100 text-indigo-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                        {grupo.alumnos.length} alumnos
-                      </span>
+          groupStudents.length === 0 ? (
+            <div className="text-center text-gray-500 mt-10">
+              No tenés grupos asignados por el momento.
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {groupStudents.map((grupo) => (
+                <div key={grupo.id} className="bg-white shadow overflow-hidden sm:rounded-lg">
+                  <div className="px-4 py-5 sm:px-6">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h3 className="text-lg leading-6 font-medium text-gray-900">
+                          {grupo.nombre}
+                        </h3>
+                        <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                          {grupo.materia}
+                        </p>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="bg-indigo-100 text-indigo-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                          {grupo.alumnos.length} alumnos
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="border-t border-gray-200">
-                  <ul className="divide-y divide-gray-200">
-                    {grupo.alumnos.map((alumno) => (
-                      <li key={alumno.id} className="px-4 py-4">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <h4 className="text-sm font-medium text-gray-900">{alumno.nombre}</h4>
-                            <p className="text-sm text-gray-500">Edad: {alumno.edad} años</p>
+                  <div className="border-t border-gray-200">
+                    <ul className="divide-y divide-gray-200">
+                      {grupo.alumnos.map((alumno) => (
+                        <li key={alumno.id} className="px-4 py-4">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <h4 className="text-sm font-medium text-gray-900">{alumno.nombre}</h4>
+                              <p className="text-sm text-gray-500">
+                                {alumno.edad > 0 ? `Edad: ${alumno.edad} años` : 'Edad no disponible'}
+                              </p>
+                            </div>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => {
+                                  setSelectedAlumno(alumno);
+                                  setShowMedicalRecord(true);
+                                }}
+                                className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                              >
+                                Ver Ficha Médica
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedAlumno(alumno);
+                                  setShowRatingForm(true);
+                                }}
+                                className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+                              >
+                                <SmilePlus className="h-4 w-4 mr-1" />
+                                Evaluar
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => {
-                                setSelectedAlumno(alumno);
-                                setShowMedicalRecord(true);
-                              }}
-                              className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                            >
-                              Ver Ficha Médica
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedAlumno(alumno);
-                                setShowRatingForm(true);
-                              }}
-                              className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-                            >
-                              <SmilePlus className="h-4 w-4 mr-1" />
-                              Evaluar
-                            </button>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )
         ) : (
           <MessagingPanel
             grupos={groupStudents}

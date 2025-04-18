@@ -3,8 +3,6 @@ import { Search, User, BookOpen } from 'lucide-react';
 import VolunteerRatings from './VolunteerRatings';
 import StudentProgress from './StudentProgress';
 import { mockProgress, mockRatings } from '../../../data/mockProgress';
-import { mockVolunteers } from '../../../data/mockVolunteers';
-import { mockTutors } from '../../../data/mockTutors';
 import axios from 'axios';
 import { API_URL } from '../../../config';
 
@@ -14,6 +12,8 @@ export default function ProgressPanel() {
   const [activeView, setActiveView] = useState<ProgressView>('volunteers');
   const [searchTerm, setSearchTerm] = useState('');
   const [students, setStudents] = useState<any[]>([]);
+  const [volunteers, setVolunteers] = useState<any[]>([]);
+  const [tutors, setTutors] = useState<any[]>([]);
 
   const token = localStorage.getItem('token');
 
@@ -29,12 +29,36 @@ export default function ProgressPanel() {
       }
     };
 
+    const fetchVolunteers = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/volunteers`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setVolunteers(res.data.data);
+      } catch (error: any) {
+        console.error('❌ Error al cargar voluntarios desde API:', error.message);
+      }
+    };
+
+    const fetchTutors = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/tutors`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setTutors(res.data.data);
+      } catch (error: any) {
+        console.error('❌ Error al cargar tutores desde API:', error.message);
+      }
+    };
+
     fetchStudents();
+    fetchVolunteers();
+    fetchTutors();
   }, []);
 
   const progressData = mockProgress.map(progress => {
     const student = students.find(s => s.id === progress.studentId);
-    const volunteer = mockVolunteers.find(v => v.id === progress.volunteerId);
+    const volunteer = volunteers.find(v => v.id === progress.volunteerId);
     const ratings = mockRatings.filter(r => r.volunteerId === progress.volunteerId);
     const averageRating = ratings.length > 0
       ? ratings.reduce((acc, curr) => acc + curr.score, 0) / ratings.length
@@ -43,18 +67,18 @@ export default function ProgressPanel() {
     return {
       ...progress,
       studentName: student ? `${student.firstName} ${student.lastName}` : '',
-      volunteerName: volunteer?.name || '',
+      volunteerName: volunteer ? `${volunteer.firstName} ${volunteer.lastName}` : '',
       volunteerRating: averageRating
     };
   });
 
-  const ratingsData = mockVolunteers.map(volunteer => {
+  const ratingsData = volunteers.map(volunteer => {
     const ratings = mockRatings.filter(r => r.volunteerId === volunteer.id);
     const averageRating = ratings.length > 0
       ? ratings.reduce((acc, curr) => acc + curr.score, 0) / ratings.length
       : 0;
     const tutorFeedback = ratings.map(rating => {
-      const tutor = mockTutors.find(t => t.id === rating.tutorId);
+      const tutor = tutors.find(t => t.id === rating.tutorId);
       return {
         tutorName: tutor?.name || '',
         feedback: rating.feedback,
@@ -64,7 +88,7 @@ export default function ProgressPanel() {
 
     return {
       id: volunteer.id,
-      name: volunteer.name,
+      name: `${volunteer.firstName} ${volunteer.lastName}`,
       email: volunteer.email,
       averageRating,
       totalRatings: ratings.length,

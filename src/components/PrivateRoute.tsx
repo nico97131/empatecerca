@@ -1,22 +1,36 @@
-import { Navigate, useLocation } from 'react-router-dom';
+import React from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 interface PrivateRouteProps {
-  children: React.ReactNode;
-  allowedRoles: Array<'admin' | 'voluntario' | 'tutor'>;
+  children: JSX.Element;
+  allowedRoles?: string[];
 }
 
 export default function PrivateRoute({ children, allowedRoles }: PrivateRouteProps) {
-  const { user } = useAuth();
-  const location = useLocation();
+  const { user, isLoading } = useAuth();
 
-  if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+  if (isLoading) {
+    return (
+      <div className="h-screen flex justify-center items-center text-gray-600">
+        Cargando...
+      </div>
+    );
   }
 
-  if (!allowedRoles.includes(user.role)) {
+  if (!user) {
+    console.warn('[PrivateRoute] Usuario no autenticado → Redirigiendo al login');
+    return <Navigate to="/login" replace />;
+  }
+
+  const userRole = user.role?.toLowerCase().trim();
+  console.log(`[PrivateRoute] Rol detectado: ${userRole}`);
+
+  if (allowedRoles && !allowedRoles.includes(userRole)) {
+    console.warn(`[PrivateRoute] Rol no autorizado (${user.role}) → Redirigiendo`);
     return <Navigate to="/unauthorized" replace />;
   }
 
-  return <>{children}</>;
+  console.log(`[PrivateRoute] ✅ Acceso autorizado para: ${user.role}`);
+  return children;
 }

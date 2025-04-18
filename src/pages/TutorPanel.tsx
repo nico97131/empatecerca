@@ -6,7 +6,6 @@ import ProgressHistory from '../components/tutor/ProgressHistory';
 import MedicalRecordForm from '../components/tutor/MedicalRecordForm';
 import axios from 'axios';
 import { API_URL } from '../config';
-import { mockVolunteers } from '../data/mockVolunteers';
 
 interface Student {
   id: number;
@@ -17,14 +16,21 @@ interface Student {
   tutorId: number;
   discipline?: string;
   groupId?: number;
-  medicalRecord?: {
-    diagnosis: string;
-    allergies: string[];
-    medications: string[];
-    observations: string;
-    lastUpdate: string;
-    volunteerNotes?: string;
-  };
+  diagnosis?: string;
+  allergies?: string;
+  medications?: string;
+  observations?: string;
+  lastUpdate?: string;
+  volunteerNotes?: string;
+}
+
+interface Volunteer {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  rating?: number;
+  groupId?: number; // si tenés asignación explícita, mejor aún
 }
 
 interface Alumno {
@@ -70,6 +76,7 @@ export default function TutorPanel() {
   const { user, logout } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'messages'>('overview');
   const [selectedAlumno, setSelectedAlumno] = useState<Alumno | null>(null);
   const [showProgress, setShowProgress] = useState(false);
@@ -79,16 +86,20 @@ export default function TutorPanel() {
     const fetchData = async () => {
       const token = localStorage.getItem('token');
       try {
-        const [studentsRes, groupsRes] = await Promise.all([
+        const [studentsRes, groupsRes, volunteersRes] = await Promise.all([
           axios.get(`${API_URL}/api/students`, {
             headers: { Authorization: `Bearer ${token}` }
           }),
           axios.get(`${API_URL}/api/groups`, {
             headers: { Authorization: `Bearer ${token}` }
-          })
+          }),
+          axios.get(`${API_URL}/api/volunteers`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
         ]);
         setStudents(studentsRes.data.data);
         setGroups(groupsRes.data.data);
+        setVolunteers(volunteersRes.data.data);
       } catch (error) {
         console.error('❌ Error al obtener datos:', error);
       }
@@ -96,13 +107,16 @@ export default function TutorPanel() {
     fetchData();
   }, []);
 
+  const getVolunteerByGroup = (groupId?: number) => {
+    if (!groupId) return undefined;
+    return volunteers.find(v => v.groupId === groupId); // O ajustá esto según tu lógica real
+  };
+
   const myStudents: Alumno[] = students
-    .filter(student => {
-      const tutorPrefix = user?.email?.split('@')[0];
-      const studentTutor = student.tutorId === 1 ? 'maria.gonzalez' : 'juan.perez';
-      return tutorPrefix === studentTutor;
-    })
-    .map(student => ({
+  .filter(student => student.tutorId === user?.id)
+  .map(student => {
+    const assignedVolunteer = getVolunteerByGroup(student.groupId);
+    return {
       id: student.id,
       nombre: `${student.firstName} ${student.lastName}`,
       progreso: [
@@ -115,16 +129,18 @@ export default function TutorPanel() {
         }
       ],
       voluntario: {
-        nombre: mockVolunteers[0]?.name || 'Voluntario Asignado',
-        email: mockVolunteers[0]?.email || 'voluntario@empate.org',
-        rating: mockVolunteers[0]?.rating || 4.5
+        nombre: assignedVolunteer
+          ? `${assignedVolunteer.first_name} ${assignedVolunteer.last_name}`
+          : 'Voluntario Asignado',
+        email: assignedVolunteer?.email || 'voluntario@empate.org',
+        rating: assignedVolunteer?.rating || 4.5
       },
       fichamedica: {
-        alergias: student.medicalRecord?.allergies || [],
-        medicamentos: student.medicalRecord?.medications || [],
-        condiciones: [student.medicalRecord?.diagnosis || ''],
-        observaciones: student.medicalRecord?.observations || '',
-        ultimaActualizacion: student.medicalRecord?.lastUpdate || '',
+        alergias: student.allergies?.split(',') || [],
+        medicamentos: student.medications?.split(',') || [],
+        condiciones: [student.diagnosis || ''],
+        observaciones: student.observations || '',
+        ultimaActualizacion: student.lastUpdate || '',
         grupoSanguineo: 'O+',
         contactoEmergencia: {
           nombre: 'Ana Martínez',
@@ -134,7 +150,8 @@ export default function TutorPanel() {
       },
       discipline: student.discipline,
       groupId: student.groupId
-    }));
+    };
+  });
 
   const handleSendMessage = (message: any) => {
     console.log('Sending message:', message);

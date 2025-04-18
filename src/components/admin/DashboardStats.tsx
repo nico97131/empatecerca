@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { BookOpen, Users, GraduationCap, UserCheck } from 'lucide-react';
 import axios from 'axios';
 import { API_URL } from '../../config';
-import { mockVolunteers } from '../../data/mockVolunteers';
 
 interface Discipline {
   id: number;
@@ -14,7 +13,7 @@ interface Discipline {
 interface Group {
   id: number;
   name: string;
-  discipline: string;
+  discipline_id: number;
   schedule: string;
   maxMembers: number;
   currentMembers: number;
@@ -31,18 +30,32 @@ interface Student {
   groupId?: number;
 }
 
+interface Volunteer {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  dni: string;
+  disciplineId: number;
+  status: 'active' | 'inactive';
+  joinDate: string;
+  inactiveReason?: string;
+}
+
 export default function DashboardStats() {
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
+
     const fetchData = async () => {
       try {
-        const [discRes, groupRes, studentRes] = await Promise.all([
+        const [discRes, groupRes, studentRes, volunteerRes] = await Promise.all([
           axios.get(`${API_URL}/api/disciplines`, {
             headers: { Authorization: `Bearer ${token}` }
           }),
@@ -51,20 +64,32 @@ export default function DashboardStats() {
           }),
           axios.get(`${API_URL}/api/students`, {
             headers: { Authorization: `Bearer ${token}` }
+          }),
+          axios.get(`${API_URL}/api/volunteers`, {
+            headers: { Authorization: `Bearer ${token}` }
           })
         ]);
 
         setDisciplines(discRes.data.data);
         setGroups(groupRes.data.data);
         setStudents(studentRes.data.data);
+        setVolunteers(volunteerRes.data.data);
         setLoading(false);
 
         console.log('📊 Disciplinas:', discRes.data.data);
         console.log('📊 Grupos:', groupRes.data.data);
         console.log('📊 Alumnos:', studentRes.data.data);
+        console.log('📊 Voluntarios:', volunteerRes.data.data);
       } catch (error: any) {
-        console.error('❌ Error al obtener datos:', error.message);
-        setApiError('Error al cargar estadísticas');
+        const status = error.response?.status;
+        console.error(`❌ Error ${status} al obtener datos:`, error.message);
+
+        if (status === 401 || status === 403) {
+          setApiError('No autorizado. Intenta volver a iniciar sesión.');
+        } else {
+          setApiError('Error al cargar estadísticas');
+        }
+
         setLoading(false);
       }
     };
@@ -72,7 +97,7 @@ export default function DashboardStats() {
     fetchData();
   }, []);
 
-  const activeVolunteers = mockVolunteers.filter((v) => v.status === 'active').length;
+  const activeVolunteers = volunteers.filter((v) => v.status === 'active').length;
 
   const stats = [
     {
@@ -106,7 +131,7 @@ export default function DashboardStats() {
   ];
 
   return (
-    <div>
+    <div className="px-4 sm:px-6 lg:px-8">
       {loading && (
         <p className="text-center text-gray-500 text-sm mb-4">Cargando estadísticas...</p>
       )}
@@ -151,7 +176,7 @@ export default function DashboardStats() {
         <h2 className="text-lg font-semibold text-gray-800 mb-4">📌 Grupos por Disciplina</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {disciplines.map((disc) => {
-            const cantidad = groups.filter((g) => g.discipline === disc.name).length;
+            const cantidad = groups.filter((g) => g.discipline_id === disc.id).length;
             return (
               <div
                 key={disc.id}
@@ -165,6 +190,16 @@ export default function DashboardStats() {
             );
           })}
         </div>
+      </div>
+
+      {/* Imagen ilustrativa */}
+      <div className="mt-20 flex justify-center mb-10">
+        <img
+          src="/images/Empate-logo.png"
+          alt="Banner Fundación Empate"
+          className="w-full max-w-3xl h-auto object-contain rounded-md shadow"
+          style={{ maxHeight: '200px' }}
+        />
       </div>
     </div>
   );

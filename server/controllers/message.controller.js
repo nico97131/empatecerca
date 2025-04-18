@@ -1,4 +1,4 @@
-import Message from '../models/message.model.js';
+//import Message from '../models/message.model.js';
 
 // @desc    Get all messages for current user
 // @route   GET /api/messages

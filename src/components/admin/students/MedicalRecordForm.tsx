@@ -24,8 +24,8 @@ interface MedicalRecordFormProps {
 export default function MedicalRecordForm({ student, onSubmit, onCancel }: MedicalRecordFormProps) {
   const [formData, setFormData] = useState({
     diagnosis: '',
-    allergies: [''],
-    medications: [''],
+    allergies: [] as string[],
+    medications: [] as string[],
     observations: '',
     volunteerNotes: ''
   });
@@ -34,8 +34,8 @@ export default function MedicalRecordForm({ student, onSubmit, onCancel }: Medic
     if (student.medicalRecord) {
       setFormData({
         ...student.medicalRecord,
-        allergies: student.medicalRecord.allergies.length > 0 ? student.medicalRecord.allergies : [''],
-        medications: student.medicalRecord.medications.length > 0 ? student.medicalRecord.medications : ['']
+        allergies: student.medicalRecord.allergies.length > 0 ? student.medicalRecord.allergies : [],
+        medications: student.medicalRecord.medications.length > 0 ? student.medicalRecord.medications : []
       });
     }
   }, [student]);
@@ -61,7 +61,7 @@ export default function MedicalRecordForm({ student, onSubmit, onCancel }: Medic
       ...formData,
       allergies: formData.allergies.filter(item => item.trim() !== ''),
       medications: formData.medications.filter(item => item.trim() !== ''),
-      lastUpdate: new Date().toISOString()
+      lastUpdate: new Date().toISOString().split('T')[0]
     });
   };
 
@@ -72,10 +72,7 @@ export default function MedicalRecordForm({ student, onSubmit, onCancel }: Medic
           <h3 className="text-lg font-medium text-gray-900">
             Ficha Médica - {student.firstName} {student.lastName}
           </h3>
-          <button
-            onClick={onCancel}
-            className="text-gray-400 hover:text-gray-500"
-          >
+          <button onClick={onCancel} className="text-gray-400 hover:text-gray-500">
             <X className="h-6 w-6" />
           </button>
         </div>
@@ -164,6 +161,19 @@ export default function MedicalRecordForm({ student, onSubmit, onCancel }: Medic
               rows={3}
               value={formData.observations}
               onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="volunteerNotes" className="block text-sm font-medium text-gray-700">
+              Notas del Voluntario
+            </label>
+            <textarea
+              id="volunteerNotes"
+              rows={2}
+              value={formData.volunteerNotes}
+              onChange={(e) => setFormData({ ...formData, volunteerNotes: e.target.value })}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>

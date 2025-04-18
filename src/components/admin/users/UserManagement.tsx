@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Search, Edit2, Trash2, Shield } from 'lucide-react';
 import UserForm from './UserForm';
 import axios from 'axios';
+import { toast } from 'react-hot-toast';
 
 interface User {
   id: number;
@@ -18,6 +19,9 @@ export default function UserManagement() {
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [hasFetched, setHasFetched] = useState(() => {
+    return sessionStorage.getItem('usersFetched') === 'true';
+  });
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -36,13 +40,20 @@ export default function UserManagement() {
         });
         console.log('✅ Usuarios cargados:', res.data.data);
         setUsers(res.data.data);
+
+        if (!hasFetched) {
+          toast.success('Usuarios cargados correctamente');
+          sessionStorage.setItem('usersFetched', 'true');
+          setHasFetched(true);
+        }
       } catch (err: any) {
         console.error('❌ Error al obtener usuarios:', err);
+        toast.error('Error al obtener usuarios');
       }
     };
 
     fetchUsers();
-  }, []);
+  }, [hasFetched]);
 
   const handleAddUser = async (newUser: Omit<User, 'id'>) => {
     const token = localStorage.getItem('token');
@@ -53,8 +64,10 @@ export default function UserManagement() {
       });
       setUsers([...users, res.data.data]);
       setShowForm(false);
+      toast.success('Usuario creado exitosamente');
     } catch (err) {
       console.error('❌ Error al agregar usuario:', err);
+      toast.error('Error al agregar usuario');
     }
   };
 
@@ -69,8 +82,10 @@ export default function UserManagement() {
       setUsers(users.map(u => (u.id === updated.id ? updated : u)));
       setShowForm(false);
       setSelectedUser(null);
+      toast.success('Usuario actualizado correctamente');
     } catch (err) {
       console.error('❌ Error al editar usuario:', err);
+      toast.error('Error al actualizar usuario');
     }
   };
 
@@ -82,8 +97,10 @@ export default function UserManagement() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUsers(users.filter(u => u.id !== id));
+      toast.success('Usuario eliminado correctamente');
     } catch (err) {
       console.error('❌ Error al eliminar usuario:', err);
+      toast.error('Error al eliminar usuario');
     }
   };
 
@@ -153,7 +170,7 @@ export default function UserManagement() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rol</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Último Acceso</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Acciones</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Acciones</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">

@@ -14,7 +14,8 @@ interface Discipline {
 interface Group {
   id: number;
   name: string;
-  discipline: string;
+  discipline_id: number;
+  discipline_name: string;
 }
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -40,9 +41,9 @@ export default function DisciplinesManagement() {
       ]);
       setDisciplines(discRes.data.data);
       setGroups(groupRes.data.data);
-    } catch (error) {
-      console.error('Error al cargar datos:', error);
-      toast.error('No se pudieron cargar los datos');
+    } catch (error: any) {
+      console.error('❌ Error al cargar datos:', error);
+      toast.error(error?.response?.data?.message || 'No se pudieron cargar los datos');
     }
   };
 
@@ -56,32 +57,28 @@ export default function DisciplinesManagement() {
         headers: { Authorization: `Bearer ${token}` },
       });
       setDisciplines([...disciplines, res.data.data]);
-      toast.success('Disciplina creada');
+      toast.success('✅ Disciplina creada correctamente');
       setShowForm(false);
-    } catch (error) {
-      console.error('Error al crear disciplina:', error);
-      toast.error('No se pudo crear la disciplina');
+    } catch (error: any) {
+      console.error('❌ Error al crear disciplina:', error);
+      toast.error(error?.response?.data?.message || 'No se pudo crear la disciplina');
     }
   };
 
   const handleEditDiscipline = async (updatedDiscipline: Discipline) => {
     try {
-      const res = await axios.put(
-        `${API_URL}/api/disciplines/${updatedDiscipline.id}`,
-        updatedDiscipline,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setDisciplines(
-        disciplines.map((d) =>
-          d.id === updatedDiscipline.id ? res.data.data : d
-        )
-      );
-      toast.success('Disciplina actualizada');
+      await axios.put(`${API_URL}/api/disciplines/${updatedDiscipline.id}`, updatedDiscipline, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setDisciplines(disciplines.map((d) =>
+        d.id === updatedDiscipline.id ? updatedDiscipline : d
+      ));
+      toast.success('✅ Disciplina actualizada');
       setShowForm(false);
       setSelectedDiscipline(null);
-    } catch (error) {
-      console.error('Error al actualizar disciplina:', error);
-      toast.error('No se pudo actualizar');
+    } catch (error: any) {
+      console.error('❌ Error al actualizar disciplina:', error);
+      toast.error(error?.response?.data?.message || 'No se pudo actualizar');
     }
   };
 
@@ -91,20 +88,20 @@ export default function DisciplinesManagement() {
         headers: { Authorization: `Bearer ${token}` },
       });
       setDisciplines(disciplines.filter((d) => d.id !== id));
-      toast.success('Disciplina eliminada');
-    } catch (error) {
-      console.error('Error al eliminar disciplina:', error);
-      toast.error('No se pudo eliminar');
+      toast.success('🗑️ Disciplina eliminada');
+    } catch (error: any) {
+      console.error('❌ Error al eliminar disciplina:', error);
+      toast.error(error?.response?.data?.message || 'No se pudo eliminar');
     }
   };
 
   const filteredDisciplines = disciplines.filter((discipline) =>
-    (discipline.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-    (discipline.category?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+    (discipline.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (discipline.category || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const countGroupsForDiscipline = (disciplineName: string) => {
-    return groups.filter((g) => g.discipline === disciplineName).length;
+  const countGroupsForDiscipline = (disciplineId: number) => {
+    return groups.filter((g) => g.discipline_id === disciplineId).length;
   };
 
   return (
@@ -117,7 +114,7 @@ export default function DisciplinesManagement() {
           <input
             type="text"
             placeholder="Buscar disciplinas..."
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -152,7 +149,7 @@ export default function DisciplinesManagement() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoría</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grupos</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -166,7 +163,7 @@ export default function DisciplinesManagement() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{discipline.category}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {countGroupsForDiscipline(discipline.name)}
+                  {countGroupsForDiscipline(discipline.id)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button

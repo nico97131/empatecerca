@@ -5,6 +5,7 @@ import {
   getStudentById,
   createStudent,
   updateStudent,
+  updateMedicalRecord,
   deleteStudent
 } from '../controllers/student.controller.js';
 
@@ -21,6 +22,8 @@ router.post('/', createStudent);
 
 // Actualizar un estudiante
 router.put('/:id', updateStudent);
+
+router.put('/:id/medical-record', updateMedicalRecord); // 📌 nueva ruta
 
 // Eliminar un estudiante
 router.delete('/:id', deleteStudent);

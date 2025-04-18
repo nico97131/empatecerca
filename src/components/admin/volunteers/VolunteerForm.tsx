@@ -11,18 +11,19 @@ interface Group {
 }
 
 interface Volunteer {
-  id: number;
-  name: string;
+  id?: number;
+  first_name: string;
+  last_name: string;
   email: string;
   phone: string;
   dni: string;
-  birthDate: string;
-  discipline: string;
+  join_date: string;
+  discipline_id: number | null;
   groups: string[];
   availability: string[];
   activeGroups: number;
   status: 'active' | 'inactive';
-  inactiveReason?: 'psicotecnico' | 'antecedentes_penales';
+  inactive_reason?: 'psicotecnico' | 'antecedentes_penales';
 }
 
 interface Discipline {
@@ -34,23 +35,24 @@ interface Discipline {
 
 interface VolunteerFormProps {
   volunteer?: Volunteer | null;
-  onSubmit: (volunteer: any) => void;
+  onSubmit: (volunteer: Volunteer) => void;
   onCancel: () => void;
 }
 
 export default function VolunteerForm({ volunteer, onSubmit, onCancel }: VolunteerFormProps) {
   const [formData, setFormData] = useState<Volunteer>({
-    name: '',
+    first_name: '',
+    last_name: '',
     email: '',
     phone: '',
     dni: '',
-    birthDate: '',
-    discipline: '',
+    join_date: '',
+    discipline_id: null,
     groups: [],
     availability: [],
     activeGroups: 0,
     status: 'active',
-    inactiveReason: undefined
+    inactive_reason: undefined
   });
 
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
@@ -58,80 +60,83 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
 
   useEffect(() => {
     if (volunteer) {
+      const [first_name, ...rest] = (volunteer.name || '').split(' ');
+      const last_name = rest.join(' ');
+      
       setFormData({
         ...volunteer,
+        first_name,
+        last_name,
+        join_date: formatDateInput(volunteer.join_date),
         groups: volunteer.groups || [],
         availability: volunteer.availability || [],
-        inactiveReason: volunteer.inactiveReason
+        inactive_reason: volunteer.inactive_reason
       });
     }
   }, [volunteer]);
 
   useEffect(() => {
-    const fetchDisciplines = async () => {
+    const fetchData = async () => {
       const token = localStorage.getItem('token');
       try {
-        const res = await axios.get(`${API_URL}/api/disciplines`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-        setDisciplines(res.data.data);
-      } catch (error) {
-        console.error('❌ Error al obtener disciplinas:', error);
+        const [discRes, groupRes] = await Promise.all([
+          axios.get(`${API_URL}/api/disciplines`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          axios.get(`${API_URL}/api/groups`, {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+        ]);
+        setDisciplines(discRes.data.data);
+        setGroups(groupRes.data.data);
+      } catch (err) {
+        console.error('❌ Error al obtener disciplinas o grupos:', err);
       }
     };
-
-    const fetchGroups = async () => {
-      const token = localStorage.getItem('token');
-      try {
-        const res = await axios.get(`${API_URL}/api/groups`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-        console.log('✅ Grupos cargados:', res.data.data);
-        setGroups(res.data.data);
-      } catch (error) {
-        console.error('❌ Error al obtener grupos:', error);
-      }
-    };
-
-    fetchDisciplines();
-    fetchGroups();
+    fetchData();
   }, []);
 
   const availableGroups = groups.filter(
-    (group) => formData.discipline && group.discipline === formData.discipline
+    (group) => formData.discipline_id && group.discipline_id === formData.discipline_id
   );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const submitData = {
       ...formData,
-      inactiveReason: formData.status === 'active' ? undefined : formData.inactiveReason
+      discipline_id: formData.discipline_id ?? null,
+      inactive_reason: formData.status === 'active' ? undefined : formData.inactive_reason
     };
-    onSubmit(volunteer ? { ...submitData, id: volunteer.id } : submitData);
+    onSubmit(volunteer?.id ? { ...submitData, id: volunteer.id } : submitData);
   };
+  
 
   const handleGroupChange = (groupName: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      groups: prev.groups.includes(groupName)
+    setFormData((prev) => {
+      const isSelected = prev.groups.includes(groupName);
+      const updatedGroups = isSelected
         ? prev.groups.filter((g) => g !== groupName)
-        : [...prev.groups, groupName],
-      activeGroups: prev.groups.includes(groupName)
-        ? prev.activeGroups - 1
-        : prev.activeGroups + 1
-    }));
+        : [...prev.groups, groupName];
+
+      return {
+        ...prev,
+        groups: updatedGroups,
+        activeGroups: updatedGroups.length
+      };
+    });
   };
 
   const handleStatusChange = (status: 'active' | 'inactive') => {
     setFormData((prev) => ({
       ...prev,
       status,
-      inactiveReason: status === 'active' ? undefined : prev.inactiveReason
+      inactive_reason: status === 'active' ? undefined : prev.inactive_reason
     }));
+  };
+
+  const formatDateInput = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toISOString().split('T')[0];
   };
 
   return (
@@ -141,51 +146,41 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
           <h3 className="text-lg font-medium text-gray-900">
             {volunteer ? 'Editar Voluntario' : 'Nuevo Voluntario'}
           </h3>
-          <button
-            onClick={onCancel}
-            className="text-gray-400 hover:text-gray-500"
-          >
+          <button onClick={onCancel} className="text-gray-400 hover:text-gray-500">
             <X className="h-6 w-6" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Datos personales */}
-          <InputField label="Nombre Completo" id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+          <InputField label="Nombre" id="first_name" value={formData.first_name} onChange={(e) => setFormData({ ...formData, first_name: e.target.value })} required />
+          <InputField label="Apellido" id="last_name" value={formData.last_name} onChange={(e) => setFormData({ ...formData, last_name: e.target.value })} required />
           <InputField label="DNI" id="dni" value={formData.dni} type="text" pattern="[0-9]{8}" required title="DNI debe contener 8 números" onChange={(e) => setFormData({ ...formData, dni: e.target.value })} />
-          <InputField label="Fecha de Nacimiento" id="birthDate" value={formData.birthDate} type="date" onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })} />
-          <InputField label="Correo Electrónico" id="email" value={formData.email} type="email" onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
-          <InputField label="Teléfono" id="phone" value={formData.phone} type="tel" onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
+          <InputField label="Fecha de Ingreso" id="join_date" value={formData.join_date} type="date" required onChange={(e) => setFormData({ ...formData, join_date: e.target.value })} />
+          <InputField label="Correo Electrónico" id="email" value={formData.email} type="email" required onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+          <InputField label="Teléfono" id="phone" value={formData.phone} type="tel" required onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
 
-          {/* Disciplina */}
           <div>
-            <label htmlFor="discipline" className="block text-sm font-medium text-gray-700">
-              Disciplina
-            </label>
+            <label htmlFor="discipline_id" className="block text-sm font-medium text-gray-700">Disciplina</label>
             <select
-              id="discipline"
-              value={formData.discipline}
-              onChange={(e) =>
-                setFormData({ ...formData, discipline: e.target.value, groups: [], activeGroups: 0 })
-              }
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              required
-            >
-              <option value="">Seleccionar disciplina</option>
-              {disciplines.map((discipline) => (
-                <option key={discipline.id} value={discipline.name}>
-                  {discipline.name}
-                </option>
-              ))}
+              id="discipline_id"
+              value={formData.discipline_id ?? ''}
+              onChange={(e) => {
+              const value = e.target.value === '' ? null : parseInt(e.target.value);
+              setFormData({ ...formData, discipline_id: value, groups: [], activeGroups: 0 });
+            }}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+          >
+            <option value="">Sin disciplina asignada</option>
+            {disciplines.map((d) => (
+            <option key={d.id} value={d.id}>{d.name}</option>
+          ))}
             </select>
+
           </div>
 
-          {/* Grupos según disciplina */}
-          {formData.discipline && (
+          {formData.discipline_id && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Grupos Disponibles
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Grupos Disponibles</label>
               <div className="space-y-2">
                 {availableGroups.map((group) => (
                   <label key={group.id} className="flex items-center">
@@ -204,11 +199,8 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
             </div>
           )}
 
-          {/* Estado */}
           <div>
-            <label htmlFor="status" className="block text-sm font-medium text-gray-700">
-              Estado
-            </label>
+            <label htmlFor="status" className="block text-sm font-medium text-gray-700">Estado</label>
             <select
               id="status"
               value={formData.status}
@@ -220,29 +212,25 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
             </select>
           </div>
 
-          {/* Motivo de inactividad */}
           {formData.status === 'inactive' && (
             <div>
-              <label htmlFor="inactiveReason" className="block text-sm font-medium text-gray-700">
-                Motivo de Inactividad
-              </label>
+              <label htmlFor="inactive_reason" className="block text-sm font-medium text-gray-700">Motivo de Inactividad</label>
               <select
-                id="inactiveReason"
-                value={formData.inactiveReason}
-                onChange={(e) =>
-                  setFormData({ ...formData, inactiveReason: e.target.value as 'psicotecnico' | 'antecedentes_penales' })
-                }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                id="inactive_reason"
+                value={formData.inactive_reason}
+                onChange={(e) => setFormData({ ...formData, inactive_reason: e.target.value as any })}
                 required
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               >
                 <option value="">Seleccionar motivo</option>
                 <option value="psicotecnico">Psicotécnico</option>
-                <option value="antecedentes_penales">Antecedentes Penales</option>
+                <option value="antecedentes">Antecedentes</option>
+                <option value="otro">Otro</option>
               </select>
+
             </div>
           )}
 
-          {/* Botones */}
           <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"
@@ -264,13 +252,10 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
   );
 }
 
-// Componente auxiliar reutilizable para inputs
 function InputField({ label, id, value, onChange, ...props }: any) {
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-gray-700">
-        {label}
-      </label>
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700">{label}</label>
       <input
         id={id}
         value={value}

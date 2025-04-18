@@ -6,88 +6,82 @@ interface Discipline {
   name: string;
   description: string;
   category: string;
-  groupsCount: number;
 }
 
 interface DisciplineFormProps {
   discipline?: Discipline | null;
-  onSubmit: (discipline: any) => void;
+  onSubmit: (discipline: Discipline | Omit<Discipline, 'id'>) => void;
   onCancel: () => void;
 }
 
 export default function DisciplineForm({ discipline, onSubmit, onCancel }: DisciplineFormProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<Omit<Discipline, 'id'>>({
     name: '',
     description: '',
-    category: '',
-    groupsCount: 0
+    category: ''
   });
 
   useEffect(() => {
     if (discipline) {
-      setFormData(discipline);
+      const { id, ...rest } = discipline;
+      setFormData(rest);
     }
   }, [discipline]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(discipline ? { ...formData, id: discipline.id } : formData);
+    if (discipline) {
+      onSubmit({ ...formData, id: discipline.id });
+    } else {
+      onSubmit(formData);
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
       <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-medium text-gray-900">
             {discipline ? 'Editar Disciplina' : 'Nueva Disciplina'}
           </h3>
-          <button
-            onClick={onCancel}
-            className="text-gray-400 hover:text-gray-500"
-          >
+          <button onClick={onCancel} className="text-gray-400 hover:text-gray-500">
             <X className="h-6 w-6" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-              Nombre
-            </label>
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nombre</label>
             <input
               type="text"
               id="name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               required
             />
           </div>
 
           <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-              Descripción
-            </label>
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700">Descripción</label>
             <textarea
               id="description"
               rows={3}
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               required
             />
           </div>
 
           <div>
-            <label htmlFor="category" className="block text-sm font-medium text-gray-700">
-              Categoría
-            </label>
+            <label htmlFor="category" className="block text-sm font-medium text-gray-700">Categoría</label>
             <input
               type="text"
               id="category"
               value={formData.category}
               onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               required
             />
           </div>

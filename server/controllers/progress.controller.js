@@ -1,4 +1,4 @@
-import Progress from '../models/progress.model.js';
+//import Progress from '../models/progress.model.js';
 
 // @desc    Get all progress records
 // @route   GET /api/progress
