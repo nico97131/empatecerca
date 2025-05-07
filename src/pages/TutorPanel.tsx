@@ -16,12 +16,22 @@ interface Student {
   tutorId: number;
   discipline?: string;
   groupId?: number;
+
+  // Campos traídos desde medical_records
   diagnosis?: string;
   allergies?: string;
   medications?: string;
   observations?: string;
   lastUpdate?: string;
-  volunteerNotes?: string;
+  bloodType?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelation?: string;
+
+  // Campos del JOIN con tutor (si querés también)
+  tutorName?: string;
+  tutorPhone?: string;
+  disciplineName?: string;
 }
 
 interface Volunteer {
@@ -72,6 +82,17 @@ interface Group {
   schedule: string;
 }
 
+const safeParseArray = (value?: string): string[] => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+
 export default function TutorPanel() {
   const { user, logout } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
@@ -86,20 +107,18 @@ export default function TutorPanel() {
     const fetchData = async () => {
       const token = localStorage.getItem('token');
       try {
-        const [studentsRes, groupsRes, volunteersRes] = await Promise.all([
+        const [studentsRes, groupsRes] = await Promise.all([
           axios.get(`${API_URL}/api/students`, {
             headers: { Authorization: `Bearer ${token}` }
           }),
           axios.get(`${API_URL}/api/groups`, {
             headers: { Authorization: `Bearer ${token}` }
           }),
-          axios.get(`${API_URL}/api/volunteers`, {
-            headers: { Authorization: `Bearer ${token}` }
-          }),
+
         ]);
         setStudents(studentsRes.data.data);
         setGroups(groupsRes.data.data);
-        setVolunteers(volunteersRes.data.data);
+        setVolunteers([]);
       } catch (error) {
         console.error('❌ Error al obtener datos:', error);
       }
@@ -113,7 +132,8 @@ export default function TutorPanel() {
   };
 
   const myStudents: Alumno[] = students
-  .filter(student => student.tutorId === user?.id)
+  .filter(student => student.tutorDni === user?.dni)
+  
   .map(student => {
     const assignedVolunteer = getVolunteerByGroup(student.groupId);
     return {
@@ -136,19 +156,19 @@ export default function TutorPanel() {
         rating: assignedVolunteer?.rating || 4.5
       },
       fichamedica: {
-        alergias: student.allergies?.split(',') || [],
-        medicamentos: student.medications?.split(',') || [],
-        condiciones: [student.diagnosis || ''],
+        alergias: safeParseArray(student.allergies),
+        medicamentos: safeParseArray(student.medications),
+        condiciones: student.diagnosis ? [student.diagnosis] : [],
         observaciones: student.observations || '',
         ultimaActualizacion: student.lastUpdate || '',
-        grupoSanguineo: 'O+',
+        grupoSanguineo: student.bloodType || '',
         contactoEmergencia: {
-          nombre: 'Ana Martínez',
-          telefono: '123-456-7890',
-          relacion: 'Madre'
+          nombre: student.emergencyContactName || 'Tutor/a',
+          telefono: student.emergencyContactPhone || 'No disponible',
+          relacion: student.emergencyContactRelation || 'Tutor/a'
         }
-      },
-      discipline: student.discipline,
+      },      
+      discipline: student.disciplineName,
       groupId: student.groupId
     };
   });
@@ -161,10 +181,37 @@ export default function TutorPanel() {
     console.log('Rating volunteer for student:', studentId, 'with rating:', rating);
   };
 
-  const handleUpdateMedicalRecord = (record: any) => {
-    console.log('Updating medical record:', record);
-    setShowMedicalRecord(false);
+  const handleUpdateMedicalRecord = async (record: MedicalRecord) => {
+    if (!selectedAlumno) return;
+  
+    const token = localStorage.getItem('token');
+    try {
+      await axios.put(`${API_URL}/api/students/${selectedAlumno.id}/medical-record`, {
+        diagnosis: record.condiciones[0] || '',
+        allergies: JSON.stringify(record.alergias),
+        medications: JSON.stringify(record.medicamentos),
+        observations: record.observaciones,
+        bloodType: record.grupoSanguineo || '',
+        emergencyContactName: record.contactoEmergencia.nombre,
+        emergencyContactPhone: record.contactoEmergencia.telefono,
+        emergencyContactRelation: record.contactoEmergencia.relacion,
+        lastUpdate: new Date().toISOString().split('T')[0],
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+  
+      console.log('✅ Ficha médica actualizada correctamente');
+      setShowMedicalRecord(false);
+      setSelectedAlumno(null);
+  
+      // Si querés, podrías hacer un fetch de students otra vez para refrescar la ficha 👇
+      // fetchStudents();
+  
+    } catch (error) {
+      console.error('❌ Error actualizando ficha médica:', error);
+    }
   };
+  
 
   const getGroupName = (groupId?: number) => {
     if (!groupId) return 'Sin asignación';

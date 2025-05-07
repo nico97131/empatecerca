@@ -11,9 +11,10 @@ export const protect = async (req, res, next) => {
       console.log('🔐 Token decodificado:', decoded);
 
       const [rows] = await db.execute(
-        'SELECT id, name, email, role FROM users WHERE id = ?',
+        'SELECT id, name, email, role, dni FROM users WHERE id = ?',
         [decoded.id]
       );
+      
 
       if (rows.length === 0) {
         console.warn('❌ Usuario no encontrado en la base de datos');

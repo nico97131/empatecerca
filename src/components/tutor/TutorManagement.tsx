@@ -12,6 +12,7 @@ interface Tutor {
   email?: string;
   phone?: string;
   wantsUser?: boolean;
+  join_date?: string;
 }
 
 export default function TutorManagement() {
@@ -103,9 +104,13 @@ export default function TutorManagement() {
       </div>
 
       {showForm && (
+        <TutorForm
+          tutor={selectedTutor}
+          onClose={() => {
             setShowForm(false);
             setSelectedTutor(null);
           }}
+          onSubmit={handleSubmit}
         />
       )}
 
@@ -128,7 +133,7 @@ export default function TutorManagement() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{tutor.dni}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{tutor.email || '—'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{tutor.phone || '—'}</td>
-                <td className=\"px-6 py-4 whitespace-nowrap text-sm text-gray-500\">{formatDate(tutor.join_date)}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(tutor.join_date)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button
                     className="text-indigo-600 hover:text-indigo-900 mr-4"

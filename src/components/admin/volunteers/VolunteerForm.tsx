@@ -18,7 +18,7 @@ interface Volunteer {
   phone: string;
   dni: string;
   join_date: string;
-  discipline_id: number | null;
+  discipline_id: number;
   groups: string[];
   availability: string[];
   activeGroups: number;

@@ -22,7 +22,7 @@ export default function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
     email: '',
     dni: '',
     password: '',
-    role: 'voluntario' as const,
+    role: user?.role || 'admin',
     status: 'active' as const
   });
 
@@ -147,21 +147,32 @@ export default function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
           </div>
 
           <div>
-            <label htmlFor="role" className="block text-sm font-medium text-gray-700">
-              Rol
-            </label>
-            <select
-              id="role"
-              value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value as User['role'] })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            >
-              <option value="admin">Administrador</option>
-              <option value="voluntario">Voluntario</option>
-              <option value="tutor">Tutor</option>
-            </select>
-          </div>
-
+  <label htmlFor="role" className="block text-sm font-medium text-gray-700">
+    Rol
+  </label>
+  {user ? (
+    <select
+      id="role"
+      value={formData.role}
+      onChange={(e) => setFormData({ ...formData, role: e.target.value as User['role'] })}
+      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+    >
+      <option value="admin">Administrador</option>
+      <option value="voluntario">Voluntario</option>
+      <option value="tutor">Tutor</option>
+    </select>
+  ) : (
+    <>
+      <input
+        type="text"
+        value="Administrador"
+        disabled
+        className="mt-1 block w-full bg-gray-100 text-gray-700 rounded-md border-gray-300 shadow-sm sm:text-sm cursor-not-allowed"
+      />
+      <input type="hidden" name="role" value="admin" />
+    </>
+  )}
+</div>
           <div>
             <label htmlFor="status" className="block text-sm font-medium text-gray-700">
               Estado

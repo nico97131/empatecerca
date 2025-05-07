@@ -1,25 +1,19 @@
 import express from 'express';
-import { protect } from '../middleware/auth.js';
 import {
   getMessages,
-  getMessage,
-  sendMessage,
-  markAsRead,
-  deleteMessage,
-  getUnreadCount
+  createMessage,
+  updateMessage,
+  getExpiredMessages,
+  deleteMessage  
+
 } from '../controllers/message.controller.js';
 
 const router = express.Router();
 
-router.use(protect);
-
-router.route('/')
-  .get(getMessages)
-  .post(sendMessage);
-
-router.get('/unread', getUnreadCount);
-router.get('/:id', getMessage);
-router.put('/:id/read', markAsRead);
+router.get('/', getMessages);
+router.get('/expired', getExpiredMessages);
+router.post('/', createMessage);
+router.put('/:id', updateMessage);
 router.delete('/:id', deleteMessage);
 
 export default router;

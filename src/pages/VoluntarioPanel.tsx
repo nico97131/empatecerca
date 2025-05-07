@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import MessagingPanel from '../components/voluntario/MessagingPanel';
 import StudentRating from '../components/voluntario/StudentRating';
 import MedicalRecord from '../components/voluntario/MedicalRecord';
+import ProgressForm from '../components/voluntario/ProgressForm';
 import axios from 'axios';
 import { API_URL } from '../config';
 
@@ -16,23 +17,32 @@ interface Student {
   tutorId: number;
   discipline?: string;
   groupId?: number;
-  medicalRecord?: {
-    diagnosis: string;
-    allergies: string[];
-    medications: string[];
-    observations: string;
-    lastUpdate: string;
-    volunteerNotes?: string;
-  };
+
+  // Campos de medical_records
+  diagnosis?: string;
+  allergies?: string; 
+  medications?: string; 
+  observations?: string;
+  lastUpdate?: string;
+  bloodType?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelation?: string;
+
+  // Campos extendidos del JOIN
+  tutorName?: string;
+  tutorEmail?: string;
 }
+
 
 interface Grupo {
   id: number;
   name: string;
   discipline: string;
-  volunteerInCharge?: number;
   schedule: string;
+  volunteers?: { id: number; name: string; dni: string }[];
 }
+
 
 interface Alumno {
   id: number;
@@ -64,6 +74,17 @@ interface Alumno {
   grupo?: string;
   discipline?: string;
 }
+
+const safeParseArray = (value: any): string[] => {
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
 
 export default function VoluntarioPanel() {
   const { user, logout } = useAuth();
@@ -101,8 +122,24 @@ export default function VoluntarioPanel() {
     return <div className="text-center mt-10">Cargando usuario...</div>;
   }
 
-  const volunteerId = user.id;
-  const assignedGroups = groups.filter(group => group.volunteerInCharge === volunteerId);
+  // 🐛 Debug info
+  console.log("🔐 Usuario logueado:", user);
+  console.log("📋 Grupos cargados:", groups.map(group => ({
+    grupo: group.name,
+    voluntarios: group.volunteers?.map(v => v.dni)
+  })));
+
+  const volunteerDni = user.dni?.trim();
+  console.log("🆔 DNI del usuario:", volunteerDni);
+
+  const assignedGroups = groups.filter(group =>
+    Array.isArray(group.volunteers) &&
+    group.volunteers.some(v => v.dni?.trim() === volunteerDni)
+  );
+
+  console.log("✅ Grupos asignados al usuario:", assignedGroups.map(g => g.name));
+
+
 
   const calcularEdad = (birthDateStr: string): number => {
     const birthDate = new Date(birthDateStr);
@@ -124,25 +161,28 @@ export default function VoluntarioPanel() {
     nombre: `${s.firstName} ${s.lastName}`,
     edad: calcularEdad(s.birthDate),
     fichamedica: {
-      alergias: s.medicalRecord?.allergies || [],
-      medicamentos: s.medicalRecord?.medications || [],
-      condiciones: s.medicalRecord?.diagnosis ? [s.medicalRecord.diagnosis] : [],
-      observaciones: s.medicalRecord?.observations || '',
-      ultimaActualizacion: s.medicalRecord?.lastUpdate || '',
-      grupoSanguineo: 'O+',
+      alergias: safeParseArray(s.allergies),
+      medicamentos: safeParseArray(s.medications),
+      condiciones: s.diagnosis ? [s.diagnosis] : [],
+      observaciones: s.observations || '',
+      ultimaActualizacion: s.lastUpdate || '',
+      grupoSanguineo: s.bloodType || '',
       contactoEmergencia: {
-        nombre: 'Ana Martínez',
-        telefono: '123-456-7890',
-        relacion: 'Madre',
+        nombre: s.emergencyContactName || '',
+        telefono: s.emergencyContactPhone || '',
+        relacion: s.emergencyContactRelation || '',
       },
     },
     tutor: {
-      nombre: 'María González',
-      email: 'maria.gonzalez@empate.org',
+      nombre: s.tutorName || '',
+      email: s.tutorEmail || '',
     },
     grupo: group.name,
     discipline: group.discipline,
   });
+  
+ 
+
 
   const groupStudents = assignedGroups.map(group => {
     const alumnos: Alumno[] = students
@@ -196,32 +236,28 @@ export default function VoluntarioPanel() {
           <nav className="-mb-px flex space-x-8">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${
-                activeTab === 'overview'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${activeTab === 'overview'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
             >
-              <Users className={`-ml-0.5 mr-2 h-5 w-5 ${
-                activeTab === 'overview'
-                  ? 'text-indigo-500'
-                  : 'text-gray-400 group-hover:text-gray-500'
-              }`} />
+              <Users className={`-ml-0.5 mr-2 h-5 w-5 ${activeTab === 'overview'
+                ? 'text-indigo-500'
+                : 'text-gray-400 group-hover:text-gray-500'
+                }`} />
               Grupos y Alumnos
             </button>
             <button
               onClick={() => setActiveTab('messages')}
-              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${
-                activeTab === 'messages'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${activeTab === 'messages'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
             >
-              <MessageSquare className={`-ml-0.5 mr-2 h-5 w-5 ${
-                activeTab === 'messages'
-                  ? 'text-indigo-500'
-                  : 'text-gray-400 group-hover:text-gray-500'
-              }`} />
+              <MessageSquare className={`-ml-0.5 mr-2 h-5 w-5 ${activeTab === 'messages'
+                ? 'text-indigo-500'
+                : 'text-gray-400 group-hover:text-gray-500'
+                }`} />
               Mensajes
             </button>
           </nav>
@@ -313,16 +349,48 @@ export default function VoluntarioPanel() {
         />
       )}
 
-      {showRatingForm && selectedAlumno && (
-        <StudentRating
-          student={selectedAlumno}
-          onSubmit={handleRateStudent}
-          onClose={() => {
-            setShowRatingForm(false);
-            setSelectedAlumno(null);
-          }}
-        />
-      )}
+{showRatingForm && selectedAlumno && (
+  <ProgressForm
+    student={selectedAlumno}
+    onCancel={() => {
+      setShowRatingForm(false);
+      setSelectedAlumno(null);
+    }}
+    onSubmit={async (progressData) => {
+      try {
+        const token = localStorage.getItem('token');
+
+        console.log("🧠 Usuario logueado:", user);
+        console.log("👦 Alumno seleccionado:", selectedAlumno);
+        console.log("📝 Datos de progreso a enviar:", {
+          studentId: selectedAlumno.id,
+          volunteerId: user.id,
+          ...progressData
+        });
+        console.log("🔐 Token:", token);
+
+        const response = await axios.post(`${API_URL}/api/progress`, {
+          studentId: selectedAlumno.id,
+          volunteerId: user.id,
+          ...progressData
+        }, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          }
+        });
+
+        console.log('✅ Progreso guardado con éxito:', response.data);
+      } catch (err) {
+        console.error('❌ Error al guardar el progreso:', err);
+      } finally {
+        setShowRatingForm(false);
+        setSelectedAlumno(null);
+      }
+    }}
+  />
+)}
+
+
     </div>
   );
 }

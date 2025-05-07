@@ -7,43 +7,43 @@ interface ProgressFormProps {
     nombre: string;
   };
   onSubmit: (progress: {
-    fecha: string;
-    asistencia: boolean;
-    desempeño: 'Excelente' | 'Bueno' | 'Regular' | 'Necesita Mejorar';
-    actividades: string[];
-    notas: string;
+    date: string;
+    attendance: boolean;
+    performance: 'Excelente' | 'Bueno' | 'Regular' | 'Necesita Mejorar';
+    activities: string[];
+    notes: string;
   }) => void;
   onCancel: () => void;
 }
 
 export default function ProgressForm({ student, onSubmit, onCancel }: ProgressFormProps) {
   const [formData, setFormData] = useState({
-    fecha: new Date().toISOString().split('T')[0],
-    asistencia: true,
-    desempeño: 'Bueno' as const,
-    actividades: [''],
-    notas: ''
+    date: new Date().toISOString().split('T')[0],
+    attendance: true,
+    performance: 'Bueno' as 'Excelente' | 'Bueno' | 'Regular' | 'Necesita Mejorar',
+    activities: [''],
+    notes: ''
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({
       ...formData,
-      actividades: formData.actividades.filter(a => a.trim() !== '')
+      activities: formData.activities.filter(a => a.trim() !== '')
     });
   };
 
   const addActivity = () => {
     setFormData({
       ...formData,
-      actividades: [...formData.actividades, '']
+      activities: [...formData.activities, '']
     });
   };
 
   const removeActivity = (index: number) => {
     setFormData({
       ...formData,
-      actividades: formData.actividades.filter((_, i) => i !== index)
+      activities: formData.activities.filter((_, i) => i !== index)
     });
   };
 
@@ -64,26 +64,24 @@ export default function ProgressForm({ student, onSubmit, onCancel }: ProgressFo
             <label htmlFor="fecha" className="block text-sm font-medium text-gray-700">
               Fecha
             </label>
-            <input
+<input
               type="date"
-              id="fecha"
-              value={formData.fecha}
-              onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+              id="date"
+              value={formData.date}
+              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Asistencia
-            </label>
+            <label className="block text-sm font-medium text-gray-700">Asistencia</label>
             <div className="mt-1 space-x-4">
               <label className="inline-flex items-center">
                 <input
                   type="radio"
-                  checked={formData.asistencia}
-                  onChange={() => setFormData({ ...formData, asistencia: true })}
+                  checked={formData.attendance}
+                  onChange={() => setFormData({ ...formData, attendance: true })}
                   className="form-radio text-indigo-600"
                 />
                 <span className="ml-2">Presente</span>
@@ -91,8 +89,8 @@ export default function ProgressForm({ student, onSubmit, onCancel }: ProgressFo
               <label className="inline-flex items-center">
                 <input
                   type="radio"
-                  checked={!formData.asistencia}
-                  onChange={() => setFormData({ ...formData, asistencia: false })}
+                  checked={!formData.attendance}
+                  onChange={() => setFormData({ ...formData, attendance: false })}
                   className="form-radio text-indigo-600"
                 />
                 <span className="ml-2">Ausente</span>
@@ -100,14 +98,17 @@ export default function ProgressForm({ student, onSubmit, onCancel }: ProgressFo
             </div>
           </div>
 
+
           <div>
-            <label htmlFor="desempeño" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="performance" className="block text-sm font-medium text-gray-700">
               Desempeño
             </label>
             <select
-              id="desempeño"
-              value={formData.desempeño}
-              onChange={(e) => setFormData({ ...formData, desempeño: e.target.value as any })}
+              id="performance"
+              value={formData.performance}
+              onChange={(e) =>
+                setFormData({ ...formData, performance: e.target.value as ProgressFormProps['onSubmit']['arguments'][0]['performance'] })
+              }
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             >
               <option value="Excelente">Excelente</option>
@@ -117,19 +118,18 @@ export default function ProgressForm({ student, onSubmit, onCancel }: ProgressFo
             </select>
           </div>
 
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Actividades Realizadas
-            </label>
-            {formData.actividades.map((actividad, index) => (
+            <label className="block text-sm font-medium text-gray-700 mb-2">Actividades Realizadas</label>
+            {formData.activities.map((actividad, index) => (
               <div key={index} className="flex gap-2 mb-2">
                 <input
                   type="text"
                   value={actividad}
                   onChange={(e) => {
-                    const newActividades = [...formData.actividades];
-                    newActividades[index] = e.target.value;
-                    setFormData({ ...formData, actividades: newActividades });
+                    const newActivities = [...formData.activities];
+                    newActivities[index] = e.target.value;
+                    setFormData({ ...formData, activities: newActivities });
                   }}
                   className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   placeholder="Descripción de la actividad"
@@ -152,19 +152,20 @@ export default function ProgressForm({ student, onSubmit, onCancel }: ProgressFo
             </button>
           </div>
 
-          <div>
-            <label htmlFor="notas" className="block text-sm font-medium text-gray-700">
+            <div>
+            <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
               Notas Adicionales
             </label>
             <textarea
-              id="notas"
+              id="notes"
               rows={3}
-              value={formData.notas}
-              onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               placeholder="Observaciones, comentarios o recomendaciones..."
             />
           </div>
+
 
           <div className="flex justify-end space-x-3 pt-4">
             <button

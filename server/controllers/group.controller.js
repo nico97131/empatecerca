@@ -44,10 +44,13 @@ export const getGroups = async (req, res) => {
       const countMatch = studentCounts.find(sc => sc.group_id === group.id);
       const currentMembers = countMatch ? countMatch.total : 0;
 
+      const volunteerInCharge = volunteers.length > 0 ? volunteers[0].id : null;
+
       return {
         ...group,
         currentMembers, // 🔥 Reemplazamos el valor guardado
         volunteers,
+        volunteerInCharge, // 👈 agregado para que el panel lo use
         schedules: schedules.length ? schedules : [{ day: 'No cargado', time_from: '', time_to: '' }]
       };
     });

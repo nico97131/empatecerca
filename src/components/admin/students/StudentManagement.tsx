@@ -72,21 +72,27 @@ export default function StudentManagement() {
       ]);
 
       const parsedStudents = studentsRes.data.data.map((s: any) => {
-        let medicalRecord;
-        try {
-          medicalRecord = s.diagnosis || s.allergies || s.medications || s.observations || s.lastUpdate || s.volunteerNotes
-            ? {
-                diagnosis: s.diagnosis || '',
-                allergies: s.allergies ? JSON.parse(s.allergies) : [],
-                medications: s.medications ? JSON.parse(s.medications) : [],
-                observations: s.observations || '',
-                lastUpdate: s.lastUpdate || '',
-                volunteerNotes: s.volunteerNotes || ''
-              }
-            : undefined;
-        } catch (err) {
-          console.warn('⚠️ Error al parsear ficha médica para el alumno:', s.id, err);
-        }
+        const safeParseArray = (value: any): string[] => {
+          if (Array.isArray(value)) return value;
+          try {
+            const parsed = JSON.parse(value);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        };
+        
+        const medicalRecord = s.diagnosis || s.allergies || s.medications || s.observations || s.lastUpdate || s.volunteerNotes
+          ? {
+              diagnosis: s.diagnosis || '',
+              allergies: safeParseArray(s.allergies),
+              medications: safeParseArray(s.medications),
+              observations: s.observations || '',
+              lastUpdate: s.lastUpdate || '',
+              volunteerNotes: s.volunteerNotes || ''
+            }
+          : undefined;
+        
 
         return {
           ...s,

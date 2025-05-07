@@ -24,8 +24,31 @@ interface MedicalRecordFormProps {
   onCancel: () => void;
 }
 
+const safeParseArray = (value: any): string[] => {
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+
 export default function MedicalRecordForm({ student, onSubmit, onCancel }: MedicalRecordFormProps) {
-  const [formData, setFormData] = useState<MedicalRecord>(student.fichamedica);
+  const [formData, setFormData] = useState<MedicalRecord>({
+    alergias: safeParseArray(student.fichamedica?.alergias),
+    medicamentos: safeParseArray(student.fichamedica?.medicamentos),
+    condiciones: safeParseArray(student.fichamedica?.condiciones),
+    observaciones: student.fichamedica?.observaciones || '',
+    grupoSanguineo: student.fichamedica?.grupoSanguineo || '',
+    contactoEmergencia: {
+      nombre: student.fichamedica?.contactoEmergencia?.nombre || '',
+      telefono: student.fichamedica?.contactoEmergencia?.telefono || '',
+      relacion: student.fichamedica?.contactoEmergencia?.relacion || ''
+    }
+  });
+  
 
   const handleArrayFieldChange = (field: keyof Pick<MedicalRecord, 'alergias' | 'medicamentos' | 'condiciones'>, index: number, value: string) => {
     const newArray = [...formData[field]];
@@ -44,11 +67,9 @@ export default function MedicalRecordForm({ student, onSubmit, onCancel }: Medic
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
-      ...formData,
-      ultimaActualizacion: new Date().toISOString().split('T')[0]
-    });
+    onSubmit(formData);
   };
+  
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">

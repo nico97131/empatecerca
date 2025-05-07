@@ -1,188 +1,163 @@
-//import Message from '../models/message.model.js';
+import db from '../config/db.js';
 
-// @desc    Get all messages for current user
-// @route   GET /api/messages
-// @access  Private
+/**
+ * GET /api/messages
+ */
 export const getMessages = async (req, res) => {
   try {
-    const messages = await Message.find({
-      $or: [
-        { from: req.user.id },
-        { to: req.user.id }
+    const [rows] = await db.query(`
+      SELECT * FROM messages
+      WHERE expiration_date >= CURDATE()
+      ORDER BY publication_date DESC
+    `);
+        const parsedRows = rows.map(row => ({
+      ...row,
+      recipients: (() => {
+        try {
+          return JSON.parse(row.recipients);
+        } catch {
+          console.warn(`⚠️ Recipients inválido en mensaje ID ${row.id}:`, row.recipients);
+          return [row.recipients]; // fallback: lo mete igual en un array
+        }
+      })()
+    }));
+    
+    res.json({ success: true, data: parsedRows });
+  } catch (error) {
+    console.error('❌ [getMessages] Error:', error);
+    res.status(500).json({ success: false, message: 'Error al obtener mensajes' });
+  }
+};
+
+/**
+ * POST /api/messages
+ */
+export const createMessage = async (req, res) => {
+  const { subject, content, recipients, status, publication_date, expiration_date } = req.body;
+
+  console.log('📨 [createMessage] Datos recibidos:', req.body);
+
+  if (!subject || !content || !recipients?.length || !publication_date || !expiration_date) {
+    console.warn('⚠️ [createMessage] Faltan campos obligatorios');
+    return res.status(400).json({ success: false, message: 'Faltan campos obligatorios' });
+  }
+
+  try {
+    const [result] = await db.query(
+      `INSERT INTO messages (subject, content, recipients, status, publication_date, expiration_date)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        subject,
+        content,
+        JSON.stringify(recipients),
+        status || 'sent',
+        publication_date,
+        expiration_date
       ]
-    })
-    .populate('from', 'name email role')
-    .populate('to', 'name email role')
-    .sort('-createdAt');
+    );
 
-    res.json({
-      success: true,
-      count: messages.length,
-      data: messages
-    });
+    console.log('✅ [createMessage] Mensaje insertado con ID:', result.insertId);
+    res.status(201).json({ success: true, message: 'Mensaje creado', id: result.insertId });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    console.error('❌ [createMessage] Error al guardar mensaje:', error);
+    res.status(500).json({ success: false, message: 'Error al guardar mensaje' });
   }
 };
 
-// @desc    Get single message
-// @route   GET /api/messages/:id
-// @access  Private
-export const getMessage = async (req, res) => {
+/**
+ * GET /api/messages/expired
+ */
+export const getExpiredMessages = async (req, res) => {
   try {
-    const message = await Message.findById(req.params.id)
-      .populate('from', 'name email role')
-      .populate('to', 'name email role');
+    const [rows] = await db.query(`
+      SELECT * FROM messages
+      WHERE expiration_date < CURDATE()
+      ORDER BY expiration_date DESC
+    `);
 
-    if (!message) {
-      return res.status(404).json({
-        success: false,
-        message: 'Message not found'
-      });
-    }
+    const parsedRows = rows.map(row => ({
+      ...row,
+      recipients: (() => {
+        try {
+          return JSON.parse(row.recipients);
+        } catch {
+          console.warn(`⚠️ Recipients inválido en mensaje ID ${row.id}:`, row.recipients);
+          return [row.recipients];
+        }
+      })()
+    }));
 
-    // Verificar que el usuario sea el remitente o el destinatario
-    if (message.from._id.toString() !== req.user.id && 
-        message.to._id.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this message'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: message
-    });
+    res.json({ success: true, data: parsedRows });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    console.error('❌ [getExpiredMessages] Error:', error);
+    res.status(500).json({ success: false, message: 'Error al obtener mensajes vencidos' });
   }
 };
 
-// @desc    Send new message
-// @route   POST /api/messages
-// @access  Private
-export const sendMessage = async (req, res) => {
+
+/**
+ * PUT /api/messages/:id
+ */
+export const updateMessage = async (req, res) => {
+  const { id } = req.params;
+  const { subject, content, recipients, status, publication_date, expiration_date } = req.body;
+
+  console.log('✏️ [updateMessage] ID:', id);
+  console.log('✏️ [updateMessage] Datos:', req.body);
+
+  if (!subject || !content || !recipients?.length || !publication_date || !expiration_date) {
+    console.warn('⚠️ [updateMessage] Faltan campos obligatorios para editar');
+    return res.status(400).json({ success: false, message: 'Faltan campos obligatorios para editar' });
+  }
+
   try {
-    const message = await Message.create({
-      from: req.user.id,
-      ...req.body
-    });
+    const [result] = await db.query(
+      `UPDATE messages
+       SET subject = ?, content = ?, recipients = ?, status = ?, publication_date = ?, expiration_date = ?
+       WHERE id = ?`,
+      [
+        subject,
+        content,
+        JSON.stringify(recipients),
+        status || 'sent',
+        publication_date,
+        expiration_date,
+        id
+      ]
+    );
 
-    const populatedMessage = await Message.findById(message._id)
-      .populate('from', 'name email role')
-      .populate('to', 'name email role');
+    if (result.affectedRows === 0) {
+      console.warn('⚠️ [updateMessage] Mensaje no encontrado para ID:', id);
+      return res.status(404).json({ success: false, message: 'Mensaje no encontrado' });
+    }
 
-    res.status(201).json({
-      success: true,
-      data: populatedMessage
-    });
+    console.log('✅ [updateMessage] Mensaje actualizado');
+    res.json({ success: true, message: 'Mensaje actualizado' });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    console.error('❌ [updateMessage] Error al actualizar mensaje:', error);
+    res.status(500).json({ success: false, message: 'Error al actualizar mensaje' });
   }
 };
 
-// @desc    Mark message as read
-// @route   PUT /api/messages/:id/read
-// @access  Private
-export const markAsRead = async (req, res) => {
-  try {
-    const message = await Message.findById(req.params.id);
-
-    if (!message) {
-      return res.status(404).json({
-        success: false,
-        message: 'Message not found'
-      });
-    }
-
-    // Solo el destinatario puede marcar como leído
-    if (message.to.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to mark this message as read'
-      });
-    }
-
-    message.read = true;
-    await message.save();
-
-    res.json({
-      success: true,
-      data: message
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-};
-
-// @desc    Delete message
-// @route   DELETE /api/messages/:id
-// @access  Private
+/**
+ * DELETE /api/messages/:id
+ */
 export const deleteMessage = async (req, res) => {
+  const { id } = req.params;
+
   try {
-    const message = await Message.findById(req.params.id);
+    const [result] = await db.query('DELETE FROM messages WHERE id = ?', [id]);
 
-    if (!message) {
-      return res.status(404).json({
-        success: false,
-        message: 'Message not found'
-      });
+    if (result.affectedRows === 0) {
+      console.warn('⚠️ [deleteMessage] Mensaje no encontrado para ID:', id);
+      return res.status(404).json({ success: false, message: 'Mensaje no encontrado' });
     }
 
-    // Solo el remitente o el destinatario pueden eliminar
-    if (message.from.toString() !== req.user.id && 
-        message.to.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to delete this message'
-      });
-    }
-
-    await message.deleteOne();
-
-    res.json({
-      success: true,
-      message: 'Message deleted successfully'
-    });
+    console.log(`🗑️ [deleteMessage] Mensaje ID ${id} eliminado`);
+    res.json({ success: true, message: 'Mensaje eliminado' });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    console.error('❌ [deleteMessage] Error:', error);
+    res.status(500).json({ success: false, message: 'Error al eliminar mensaje' });
   }
 };
 
-// @desc    Get unread messages count
-// @route   GET /api/messages/unread
-// @access  Private
-export const getUnreadCount = async (req, res) => {
-  try {
-    const count = await Message.countDocuments({
-      to: req.user.id,
-      read: false
-    });
-
-    res.json({
-      success: true,
-      data: { count }
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-};

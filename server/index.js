@@ -14,6 +14,8 @@ import progressRoutes from './routes/progress.routes.js';
 import messageRoutes from './routes/message.routes.js';
 import studentRoutes from './routes/student.routes.js';
 import tutorsRoutes from './routes/tutor.routes.js';
+import ratingsRoutes from './routes/ratings.routes.js'; 
+
 
 // Cargar variables de entorno
 dotenv.config();
@@ -51,6 +53,7 @@ const startServer = async () => {
   app.use('/api/messages', messageRoutes);
   app.use('/api/students', studentRoutes);
   app.use('/api/tutors', tutorsRoutes);
+  app.use('/api/ratings', ratingsRoutes); 
 
   // Ruta base
   app.get('/', (req, res) => {

@@ -1,4 +1,5 @@
-import { Star, ThumbsUp, Award } from 'lucide-react';
+import { useState } from 'react';
+import { Star, Award } from 'lucide-react';
 
 interface VolunteerRating {
   id: number;
@@ -19,7 +20,37 @@ interface VolunteerRatingsProps {
 }
 
 export default function VolunteerRatings({ volunteers, searchTerm }: VolunteerRatingsProps) {
-  const filteredVolunteers = volunteers.filter(volunteer =>
+  const [filterOption, setFilterOption] = useState<'all' | 'top' | 'low'>('all');
+
+  const renderStars = (rating: number) => {
+    const rounded = Math.round(rating);
+    const colorClass = rating < 2.5 ? 'text-red-500 fill-red-500' : 'text-yellow-400 fill-yellow-400';
+
+    const stars = [];
+
+    for (let i = 0; i < 5; i++) {
+      stars.push(
+        <Star
+          key={i}
+          className={`h-5 w-5 ${i < rounded ? colorClass : 'text-gray-300'}`}
+        />
+      );
+    }
+
+    return stars;
+  };
+
+  let filteredVolunteers = volunteers;
+
+  if (filterOption === 'top') {
+    filteredVolunteers = [...volunteers]
+      .sort((a, b) => Number(b.averageRating) - Number(a.averageRating))
+      .slice(0, 3);
+  } else if (filterOption === 'low') {
+    filteredVolunteers = volunteers.filter(v => Number(v.averageRating) < 2.5);
+  }
+
+  filteredVolunteers = filteredVolunteers.filter(volunteer =>
     volunteer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     volunteer.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -34,6 +65,41 @@ export default function VolunteerRatings({ volunteers, searchTerm }: VolunteerRa
           Evaluaciones y retroalimentación de los tutores
         </p>
       </div>
+
+      <div className="flex items-center gap-2 px-4 pb-2">
+  <button
+    onClick={() => setFilterOption('all')}
+    className={`px-3 py-1 rounded-md text-sm font-medium border ${
+      filterOption === 'all'
+        ? 'bg-indigo-600 text-white border-transparent'
+        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+    }`}
+  >
+    Todos
+  </button>
+  <button
+    onClick={() => setFilterOption('top')}
+    className={`px-3 py-1 rounded-md text-sm font-medium border ${
+      filterOption === 'top'
+        ? 'bg-yellow-500 text-white border-transparent'
+        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+    }`}
+  >
+    🏆 Top 3
+  </button>
+  <button
+    onClick={() => setFilterOption('low')}
+    className={`px-3 py-1 rounded-md text-sm font-medium border ${
+      filterOption === 'low'
+        ? 'bg-red-500 text-white border-transparent'
+        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+    }`}
+  >
+    ❗ En observación
+  </button>
+</div>
+
+
       <div className="border-t border-gray-200">
         {filteredVolunteers.map((volunteer) => (
           <div key={volunteer.id} className="px-4 py-5 sm:px-6 border-b border-gray-200 last:border-b-0">
@@ -43,9 +109,20 @@ export default function VolunteerRatings({ volunteers, searchTerm }: VolunteerRa
                 <p className="text-sm text-gray-500">{volunteer.email}</p>
               </div>
               <div className="flex items-center space-x-2">
-                <Star className="h-5 w-5 text-yellow-400" />
-                <span className="text-lg font-semibold">{volunteer.averageRating.toFixed(1)}</span>
-                <span className="text-sm text-gray-500">({volunteer.totalRatings} calificaciones)</span>
+                {renderStars(Number(volunteer.averageRating))}
+                <span className="text-lg font-semibold">
+                  {isNaN(Number(volunteer.averageRating))
+                    ? '-'
+                    : Number(volunteer.averageRating).toFixed(1)}
+                </span>
+                <span className="text-sm text-gray-500">
+                  ({volunteer.totalRatings} calificaciones)
+                </span>
+                {Number(volunteer.averageRating) >= 4.5 && (
+                  <span title="Destacado">
+                    <Award className="h-5 w-5 text-emerald-500" />
+                  </span>
+                )}
               </div>
             </div>
 
