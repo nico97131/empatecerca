@@ -106,13 +106,14 @@ export default function TutorManagement() {
       {showForm && (
         <TutorForm
           tutor={selectedTutor}
-          onClose={() => {
+          onCancel={() => {
             setShowForm(false);
             setSelectedTutor(null);
           }}
           onSubmit={handleSubmit}
         />
       )}
+
 
       <div className="bg-white shadow overflow-hidden sm:rounded-lg">
         <table className="min-w-full divide-y divide-gray-200">

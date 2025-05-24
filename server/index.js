@@ -13,7 +13,7 @@ import groupRoutes from './routes/group.routes.js';
 import progressRoutes from './routes/progress.routes.js';
 import messageRoutes from './routes/message.routes.js';
 import studentRoutes from './routes/student.routes.js';
-import tutorsRoutes from './routes/tutor.routes.js';
+import tutorRoutes from './routes/tutor.routes.js';
 import ratingsRoutes from './routes/ratings.routes.js'; 
 
 
@@ -52,7 +52,7 @@ const startServer = async () => {
   app.use('/api/progress', progressRoutes);
   app.use('/api/messages', messageRoutes);
   app.use('/api/students', studentRoutes);
-  app.use('/api/tutors', tutorsRoutes);
+  app.use('/api/tutors', tutorRoutes);
   app.use('/api/ratings', ratingsRoutes); 
 
   // Ruta base

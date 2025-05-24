@@ -11,7 +11,7 @@ interface Group {
   maxMembers: number;
   currentMembers: number;
   location: string;
-  volunteers?: { id: number }[];
+  volunteers?: { id: number; name: string; dni: string }[];
 }
 
 interface Discipline {
@@ -87,12 +87,14 @@ export default function GroupForm({ group, onSubmit, onCancel }: GroupFormProps)
       }
     };
 
-    const fetchVolunteers = async () => {
+const fetchVolunteers = async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/volunteers?status=activo`, {
+        const res = await axios.get(`${API_URL}/api/volunteers`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        setVolunteers(res.data?.data || []);
+        setVolunteers(
+          (res.data?.data || []).filter((v: Volunteer) => v.name && v.dni).sort((a: Volunteer, b: Volunteer) => a.name.localeCompare(b.name))
+        );
       } catch (error) {
         toast.error('Error al obtener voluntarios');
       }
@@ -134,8 +136,11 @@ export default function GroupForm({ group, onSubmit, onCancel }: GroupFormProps)
   };
 
   const filteredVolunteers = volunteers.filter(v =>
-    v.name.toLowerCase().includes(searchTerm.toLowerCase()) || v.dni.includes(searchTerm)
+    v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    v.dni.includes(searchTerm)
   );
+
+
 
   const handleAddSchedule = () => {
     if (newSchedule.time_from && newSchedule.time_to) {
@@ -243,8 +248,9 @@ export default function GroupForm({ group, onSubmit, onCancel }: GroupFormProps)
                     className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
                   />
                   <label htmlFor={`vol-${vol.id}`} className="text-sm text-gray-700">
-                    {vol.name} (DNI: {vol.dni})
+                    {vol.name || 'Sin nombre'} (DNI: {vol.dni})
                   </label>
+
                 </div>
               ))}
             </div>
@@ -278,3 +284,4 @@ function Input({ label, id, value, onChange, ...props }: any) {
     </div>
   );
 }
+

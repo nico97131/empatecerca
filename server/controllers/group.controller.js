@@ -11,11 +11,12 @@ export const getGroups = async (req, res) => {
       LEFT JOIN disciplines d ON g.discipline_id = d.id
     `);
 
-    const [groupVolunteers] = await db.execute(`
-      SELECT gv.group_id, v.id, v.name, v.dni
-      FROM group_volunteers gv
-      JOIN volunteers v ON gv.volunteer_id = v.id
-    `);
+const [groupVolunteers] = await db.execute(`
+  SELECT gv.group_id, v.id, CONCAT(v.first_name, ' ', v.last_name) AS name, v.dni
+  FROM group_volunteers gv
+  JOIN volunteers v ON gv.volunteer_id = v.id
+`);
+
 
     const [groupSchedules] = await db.execute(`
       SELECT group_id, day, time_from, time_to

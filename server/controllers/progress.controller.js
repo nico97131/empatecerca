@@ -8,7 +8,7 @@ export const getProgress = async (req, res) => {
     const [rows] = await pool.query(`
       SELECT p.*, 
              CONCAT(s.firstName, ' ', s.lastName) AS studentName,
-             v.name AS volunteerName
+CONCAT(v.first_name, ' ', v.last_name) AS volunteerName
 
       FROM progress p
       LEFT JOIN students s ON p.student_id = s.id
@@ -29,10 +29,10 @@ export const getProgress = async (req, res) => {
 export const getStudentProgress = async (req, res) => {
   try {
     const [rows] = await pool.query(`
-      SELECT p.*, u.name AS volunteerName
+      SELECT p.*, CONCAT(v.first_name, ' ', v.last_name) AS volunteerName
+
       FROM progress p
       LEFT JOIN volunteers v ON p.volunteer_id = v.id
-      LEFT JOIN users u ON v.user_id = u.id
       WHERE p.student_id = ?
       ORDER BY p.date DESC
     `, [req.params.studentId]);    
@@ -46,11 +46,11 @@ export const getStudentProgress = async (req, res) => {
 export const getGroupProgress = async (req, res) => {
   try {
     const [rows] = await pool.query(`
-      SELECT p.*, CONCAT(s.first_name, ' ', s.last_name) AS studentName, u.name AS volunteerName
+      SELECT p.*, CONCAT(s.first_name, ' ', s.last_name) AS studentName,
+       CONCAT(v.first_name, ' ', v.last_name) AS volunteerName
       FROM progress p
       JOIN students s ON p.student_id = s.id
       JOIN volunteers v ON p.volunteer_id = v.id
-      JOIN users u ON v.user_id = u.id
       WHERE s.group_id = ?
       ORDER BY p.date DESC
     `, [req.params.groupId]);    

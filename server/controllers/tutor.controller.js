@@ -18,11 +18,13 @@ async function createUserFromTutor(tutor) {
       return;
     }
 
-    await db.query(
-      `INSERT INTO users (name, email, dni, password, role, status)
-       VALUES (?, ?, ?, ?, 'tutor', 'active')`,
-      [tutor.name, email, tutor.dni, tutor.dni]
-    );
+await db.query(
+  `INSERT INTO users (name, email, dni, password, role, status)
+   VALUES (?, ?, ?, ?, 'tutor', 'active')`,
+  [tutor.name, email, tutor.dni, tutor.dni]
+);
+
+
 
     console.log(`✅ Usuario creado automáticamente para tutor con email ${email}`);
   } catch (err) {
@@ -38,6 +40,8 @@ export const createTutor = async (req, res) => {
   try {
     const { name, dni, email, phone, wantsUser } = req.body;
 
+    console.log('🔍 wantsUser:', wantsUser);
+
     const [existingTutor] = await db.query('SELECT id FROM tutors WHERE dni = ?', [dni]);
     if (existingTutor.length > 0) {
       return res.status(400).json({
@@ -47,12 +51,12 @@ export const createTutor = async (req, res) => {
     }
 
     const [result] = await db.query(
-      `INSERT INTO tutors (name, dni, email, phone, join_date)
-       VALUES (?, ?, ?, ?, CURRENT_DATE)`,
-      [name, dni, email || null, phone || null]
+      `INSERT INTO tutors (name, dni, email, phone, wantsUser, join_date)
+       VALUES (?, ?, ?, ?, ?, CURRENT_DATE)`,
+      [name, dni, email || null, phone || null, Number(wantsUser) === 1 ? 1 : 0]
     );
 
-    if (wantsUser === true) {
+    if (Number(wantsUser) === 1) {
       await createUserFromTutor({ name, dni });
     }
 
@@ -91,14 +95,16 @@ export const getAllTutors = async (req, res) => {
 export const updateTutor = async (req, res) => {
   const { id } = req.params;
   const { name, dni, email, phone, wantsUser } = req.body;
+  console.log('🔍 wantsUser:', wantsUser);
 
   try {
     await db.query(
       `UPDATE tutors
-       SET name = ?, dni = ?, email = ?, phone = ?
-       WHERE id = ?`,
-      [name, dni, email || null, phone || null, id]
+   SET name = ?, dni = ?, email = ?, phone = ?, wantsUser = ?
+   WHERE id = ?`,
+      [name, dni, email || null, phone || null, wantsUser ? 1 : 0, id]
     );
+
 
     if (wantsUser === true) {
       await createUserFromTutor({ name, dni });

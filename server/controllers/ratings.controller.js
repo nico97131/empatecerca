@@ -12,7 +12,7 @@ export const getVolunteerRatingsSummary = async (req, res) => {
     const [rows] = await db.query(`
         SELECT 
           vr.volunteer_id,
-          v.name,
+          CONCAT(v.first_name, ' ', v.last_name) AS name,
           v.email,
           ROUND(AVG(vr.score), 1) AS averageRating,
           COUNT(*) AS totalRatings,

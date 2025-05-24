@@ -166,7 +166,7 @@ export const updateMedicalRecord = async (req, res) => {
   } = req.body;
 
   try {
-    const formattedLastUpdate = new Date(lastUpdate).toISOString().split('T')[0];
+const formattedLastUpdate = lastUpdate ? new Date(lastUpdate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
 
     // 🔎 Verificamos si existe una ficha médica para el estudiante
     const [existingRecord] = await db.execute(
@@ -185,7 +185,7 @@ export const updateMedicalRecord = async (req, res) => {
              lastUpdate = ?
          WHERE student_id = ?`,
         [
-          diagnosis || '',
+          JSON.stringify(diagnosis || ''),
           JSON.stringify(allergies || []),
           JSON.stringify(medications || []),
           observations || '',

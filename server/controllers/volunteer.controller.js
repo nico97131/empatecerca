@@ -26,7 +26,20 @@ export const getVolunteers = async (req, res) => {
   console.log('📥 GET /api/volunteers');
 
   try {
-    const [rows] = await db.query('SELECT * FROM volunteers');
+    const [rows] = await db.query(`
+      SELECT 
+        id, 
+        CONCAT(first_name, ' ', last_name) AS name,
+        dni,
+        email,
+        phone,
+        discipline_id,
+        join_date,
+        status,
+        inactive_reason
+      FROM volunteers
+    `);
+
     console.log(`✅ Se obtuvieron ${rows.length} voluntarios`);
     res.json({ success: true, count: rows.length, data: rows });
   } catch (error) {
@@ -34,6 +47,7 @@ export const getVolunteers = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 // @desc Get single volunteer
 // @route GET /api/volunteers/:id
@@ -93,10 +107,11 @@ export const createVolunteer = async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO volunteers
-       (name, email, phone, dni, discipline_id, join_date, status, inactive_reason)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (first_name, last_name, email, phone, dni, discipline_id, join_date, status, inactive_reason)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        name,
+        first_name,
+        last_name,
         email,
         phone,
         dni,
@@ -190,7 +205,8 @@ export const updateVolunteer = async (req, res) => {
     const values = [];
 
     const dataToUpdate = {
-      name,
+      first_name,
+      last_name,
       email,
       phone,
       dni,
@@ -256,6 +272,10 @@ export const deleteVolunteer = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Volunteer not found' });
     }
 
+    // ✅ Eliminar relaciones antes
+    await db.query('DELETE FROM group_volunteers WHERE volunteer_id = ?', [req.params.id]);
+
+    // ✅ Ahora eliminar el voluntario
     await db.query('DELETE FROM volunteers WHERE id = ?', [req.params.id]);
     console.log('✅ Voluntario eliminado correctamente');
 
@@ -265,6 +285,7 @@ export const deleteVolunteer = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 // @desc Update availability
 // @route PUT /api/volunteers/:id/availability

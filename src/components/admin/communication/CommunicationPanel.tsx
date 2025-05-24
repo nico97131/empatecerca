@@ -4,6 +4,18 @@ import MessageForm from './MessageForm';
 import axios from 'axios';
 import { API_URL } from '../../../config';
 
+// Tooltip inline
+const Tooltip = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <div className="relative group inline-block">
+    {children}
+    <div className="absolute z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-200
+        bottom-[-2.2rem] right-0 translate-x-1/4 
+        bg-gray-800 text-white text-xs rounded-md px-2 py-1 whitespace-nowrap shadow-lg">
+      {label}
+    </div>
+  </div>
+);
+
 interface Message {
   id: number;
   subject: string;
@@ -21,6 +33,14 @@ export default function CommunicationPanel() {
   const [searchTerm, setSearchTerm] = useState('');
   const [editMessageId, setEditMessageId] = useState<number | null>(null);
   const [showExpired, setShowExpired] = useState(false);
+
+  const formatDate = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toISOString().split('T')[0];
+    } catch {
+      return dateStr;
+    }
+  };
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -46,15 +66,6 @@ export default function CommunicationPanel() {
     fetchMessages();
   }, [showExpired]);
 
-  const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toISOString().split('T')[0];
-    } catch {
-      return dateStr;
-    }
-  };
-
-
   const handleSendMessage = async (formData: {
     subject: string;
     content: string;
@@ -74,29 +85,17 @@ export default function CommunicationPanel() {
 
       if (editMessageId !== null) {
         await axios.put(`${API_URL}/api/messages/${editMessageId}`, payload);
-
         setMessages(prev =>
           prev.map(m =>
             m.id === editMessageId
-              ? {
-                ...m,
-                ...formData,
-                date: formData.publishDate,
-                status: 'sent'
-              }
+              ? { ...m, ...formData, date: formData.publishDate, status: 'sent' }
               : m
           )
         );
       } else {
         const res = await axios.post(`${API_URL}/api/messages`, payload);
-
         setMessages(prev => [
-          {
-            id: res.data.id,
-            ...formData,
-            date: formData.publishDate,
-            status: 'sent'
-          },
+          { id: res.data.id, ...formData, date: formData.publishDate, status: 'sent' },
           ...prev
         ]);
       }
@@ -110,7 +109,6 @@ export default function CommunicationPanel() {
 
   const handleDeleteMessage = async (id: number) => {
     if (!confirm('¿Estás seguro de que querés eliminar este mensaje?')) return;
-
     try {
       await axios.delete(`${API_URL}/api/messages/${id}`);
       setMessages(prev => prev.filter((msg) => msg.id !== id));
@@ -124,15 +122,15 @@ export default function CommunicationPanel() {
       message.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
       message.content.toLowerCase().includes(searchTerm.toLowerCase())
     )
-    .sort((a, b) => b.date.localeCompare(a.date));
+    .sort((a, b) => b.publishDate.localeCompare(a.publishDate));
 
   const renderRecipientBadge = (recipient: string) => {
     const color =
       recipient === 'voluntarios'
         ? 'bg-blue-100 text-blue-800'
         : recipient === 'tutores'
-          ? 'bg-purple-100 text-purple-800'
-          : 'bg-gray-100 text-gray-800';
+        ? 'bg-purple-100 text-purple-800'
+        : 'bg-gray-100 text-gray-800';
 
     return (
       <span
@@ -163,15 +161,17 @@ export default function CommunicationPanel() {
         <div className="flex gap-2 ml-4">
           <button
             onClick={() => setShowExpired(false)}
-            className={`px-3 py-1 rounded-md text-sm font-medium ${!showExpired ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'
-              }`}
+            className={`px-3 py-1 rounded-md text-sm font-medium ${
+              !showExpired ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'
+            }`}
           >
             Vigentes
           </button>
           <button
             onClick={() => setShowExpired(true)}
-            className={`px-3 py-1 rounded-md text-sm font-medium ${showExpired ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'
-              }`}
+            className={`px-3 py-1 rounded-md text-sm font-medium ${
+              showExpired ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'
+            }`}
           >
             Historial
           </button>
@@ -200,23 +200,19 @@ export default function CommunicationPanel() {
           initialData={
             editMessageId !== null
               ? (() => {
-                const msg = messages.find((m) => m.id === editMessageId);
-                if (!msg) return undefined;
-
-                const formatDate = (dateStr: string) => new Date(dateStr).toISOString().split('T')[0];
-
-                return {
-                  subject: msg.subject,
-                  content: msg.content,
-                  recipients: msg.recipients,
-                  publishDate: formatDate(msg.publishDate),
-                  expiryDate: formatDate(msg.expiryDate)
-                };
-              })()
+                  const msg = messages.find((m) => m.id === editMessageId);
+                  if (!msg) return undefined;
+                  const format = (d: string) => new Date(d).toISOString().split('T')[0];
+                  return {
+                    subject: msg.subject,
+                    content: msg.content,
+                    recipients: msg.recipients,
+                    publishDate: format(msg.publishDate),
+                    expiryDate: format(msg.expiryDate)
+                  };
+                })()
               : undefined
           }
-
-
         />
       )}
 
@@ -229,64 +225,48 @@ export default function CommunicationPanel() {
                   <h3 className="text-lg font-medium text-gray-900">{message.subject}</h3>
                   <p className="mt-1 text-sm text-gray-500">{message.content}</p>
                 </div>
-                <div className="flex flex-col items-end gap-2">
-  <span
-    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-      message.status === 'sent'
-        ? 'bg-green-100 text-green-800'
-        : 'bg-yellow-100 text-yellow-800'
-    }`}
-  >
-    {message.status === 'sent' ? 'Enviado' : 'Borrador'}
-  </span>
 
-  {!showExpired && (
-    <div className="flex gap-2">
-      <button
-        onClick={() => {
-          setEditMessageId(message.id);
-          setShowForm(true);
-        }}
-        title="Editar"
-        className="text-gray-500 hover:text-gray-700"
-      >
-        <Pencil className="h-4 w-4" />
-      </button>
-      <button
-        onClick={() => handleDeleteMessage(message.id)}
-        title="Eliminar"
-        className="text-red-500 hover:text-red-700"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
-    </div>
-  )}
-</div>
-
-
+                {!showExpired && (
+                  <div className="flex gap-2 items-start">
+                    <Tooltip label="Editar">
+                      <button
+                        onClick={() => {
+                          setEditMessageId(message.id);
+                          setShowForm(true);
+                        }}
+                        className="text-gray-500 hover:text-gray-700"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </Tooltip>
+                    <Tooltip label="Eliminar">
+                      <button
+                        onClick={() => handleDeleteMessage(message.id)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </Tooltip>
+                  </div>
+                )}
               </div>
 
               <div className="mt-2 flex items-center text-sm text-gray-500 gap-2 flex-wrap">
                 <Users className="flex-shrink-0 h-4 w-4 text-gray-400" />
-                <span className="flex gap-1">
-                  {message.recipients.map(renderRecipientBadge)}
-                </span>
-              </div>
-              <div className="mt-3 text-sm text-gray-500 space-y-1">
-                <p>
-                  <strong className="text-gray-700">📅 Publicado:</strong>{' '}
-                  {formatDate(message.publishDate)}
-                </p>
-                <p>
-                  <strong className="text-gray-700">⏰ Caduca:</strong>{' '}
-                  {formatDate(message.expiryDate)}
-                </p>
-                <p>
-                  <strong className="text-gray-700">🕓 Última edición:</strong>{' '}
-                  {formatDate(message.date)}
-                </p>
+                <span className="flex gap-1">{message.recipients.map(renderRecipientBadge)}</span>
               </div>
 
+              <div className="mt-3 text-sm text-gray-500 space-y-1">
+                <p>
+                  <strong className="text-gray-700">📅 Publicado:</strong> {formatDate(message.publishDate)}
+                </p>
+                <p>
+                  <strong className="text-gray-700">⏰ Caduca:</strong> {formatDate(message.expiryDate)}
+                </p>
+                <p>
+                  <strong className="text-gray-700">🕓 Última edición:</strong> {formatDate(message.date)}
+                </p>
+              </div>
             </div>
           ))}
         </div>

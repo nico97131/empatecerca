@@ -46,20 +46,21 @@ export default function VolunteersManagement() {
       const rawVolunteers = res.data.data;
 
       const mapped = rawVolunteers.map((volunteer: any) => {
-        const matched = disciplines.find(d => d.id === volunteer.discipline_id);
-        return {
-          ...volunteer,
-          name: volunteer.name,
-          email: volunteer.email,
-          phone: volunteer.phone,
-          dni: volunteer.dni,
-          birthDate: volunteer.join_date,
-          discipline: matched?.name || 'Sin asignar',
-          specialization: matched?.category || '',
-          availability: [],
-          groups: []
-        };
-      });
+  const matched = disciplines.find(d => d.id === volunteer.discipline_id);
+  return {
+    ...volunteer,
+    name: `${volunteer.first_name || ''} ${volunteer.last_name || ''}`.trim(), // 👈 acá creás `name`
+    email: volunteer.email,
+    phone: volunteer.phone,
+    dni: volunteer.dni,
+    birthDate: volunteer.join_date,
+    discipline: matched?.name || 'Sin asignar',
+    specialization: matched?.category || '',
+    availability: [],
+    groups: []
+  };
+});
+
 
       setVolunteers(mapped);
     } catch (error: any) {

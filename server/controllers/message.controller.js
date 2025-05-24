@@ -10,18 +10,21 @@ export const getMessages = async (req, res) => {
       WHERE expiration_date >= CURDATE()
       ORDER BY publication_date DESC
     `);
-        const parsedRows = rows.map(row => ({
+    const parsedRows = rows.map(row => ({
       ...row,
       recipients: (() => {
         try {
-          return JSON.parse(row.recipients);
+          const parsed = JSON.parse(row.recipients);
+          if (!Array.isArray(parsed)) throw new Error();
+          return parsed;
         } catch {
           console.warn(`⚠️ Recipients inválido en mensaje ID ${row.id}:`, row.recipients);
-          return [row.recipients]; // fallback: lo mete igual en un array
+          return [row.recipients];
         }
       })()
+
     }));
-    
+
     res.json({ success: true, data: parsedRows });
   } catch (error) {
     console.error('❌ [getMessages] Error:', error);
@@ -43,6 +46,13 @@ export const createMessage = async (req, res) => {
   }
 
   try {
+    // Validar destinatarios permitidos
+    const validRecipients = ['voluntarios', 'tutores', 'todos'];
+    const invalid = recipients.some(r => typeof r !== 'string' || !validRecipients.includes(r));
+    if (invalid) {
+      return res.status(400).json({ success: false, message: 'Destinatarios inválidos' });
+    }
+
     const [result] = await db.query(
       `INSERT INTO messages (subject, content, recipients, status, publication_date, expiration_date)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -79,12 +89,15 @@ export const getExpiredMessages = async (req, res) => {
       ...row,
       recipients: (() => {
         try {
-          return JSON.parse(row.recipients);
+          const parsed = JSON.parse(row.recipients);
+          if (!Array.isArray(parsed)) throw new Error();
+          return parsed;
         } catch {
           console.warn(`⚠️ Recipients inválido en mensaje ID ${row.id}:`, row.recipients);
           return [row.recipients];
         }
       })()
+
     }));
 
     res.json({ success: true, data: parsedRows });
@@ -111,6 +124,13 @@ export const updateMessage = async (req, res) => {
   }
 
   try {
+    // Validar destinatarios permitidos
+    const validRecipients = ['voluntarios', 'tutores', 'todos'];
+    const invalid = recipients.some(r => typeof r !== 'string' || !validRecipients.includes(r));
+    if (invalid) {
+      return res.status(400).json({ success: false, message: 'Destinatarios inválidos' });
+    }
+
     const [result] = await db.query(
       `UPDATE messages
        SET subject = ?, content = ?, recipients = ?, status = ?, publication_date = ?, expiration_date = ?
