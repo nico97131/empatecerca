@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Send, Users, Search, Pencil, Trash2 } from 'lucide-react';
-import MessageForm from './MessageForm';
+import AnnouncementForm from "./AnnouncementForm";
 import axios from 'axios';
 import { API_URL } from '../../../config';
+import { toast } from 'react-hot-toast'; 
 
 // Tooltip inline
 const Tooltip = ({ label, children }: { label: string; children: React.ReactNode }) => (
@@ -46,7 +47,7 @@ export default function CommunicationPanel() {
     const fetchMessages = async () => {
       try {
         const endpoint = showExpired ? '/expired' : '';
-        const res = await axios.get(`${API_URL}/api/messages${endpoint}`);
+        const res = await axios.get(`${API_URL}/api/announcements${endpoint}`);
         const data = res.data.data.map((msg: any) => ({
           id: msg.id,
           subject: msg.subject,
@@ -67,55 +68,61 @@ export default function CommunicationPanel() {
   }, [showExpired]);
 
   const handleSendMessage = async (formData: {
-    subject: string;
-    content: string;
-    recipients: string[];
-    publishDate: string;
-    expiryDate: string;
-  }) => {
-    try {
-      const payload = {
-        subject: formData.subject,
-        content: formData.content,
-        recipients: formData.recipients,
-        status: 'sent',
-        publication_date: formData.publishDate,
-        expiration_date: formData.expiryDate
-      };
+  subject: string;
+  content: string;
+  recipients: string[];
+  publishDate: string;
+  expiryDate: string;
+}) => {
+  try {
+    const payload = {
+      subject: formData.subject,
+      content: formData.content,
+      recipients: formData.recipients,
+      status: 'sent',
+      publication_date: formData.publishDate,
+      expiration_date: formData.expiryDate
+    };
 
-      if (editMessageId !== null) {
-        await axios.put(`${API_URL}/api/messages/${editMessageId}`, payload);
-        setMessages(prev =>
-          prev.map(m =>
-            m.id === editMessageId
-              ? { ...m, ...formData, date: formData.publishDate, status: 'sent' }
-              : m
-          )
-        );
-      } else {
-        const res = await axios.post(`${API_URL}/api/messages`, payload);
-        setMessages(prev => [
-          { id: res.data.id, ...formData, date: formData.publishDate, status: 'sent' },
-          ...prev
-        ]);
-      }
-
-      setShowForm(false);
-      setEditMessageId(null);
-    } catch (error) {
-      console.error('❌ Error al enviar/editar mensaje:', error);
+    if (editMessageId !== null) {
+      await axios.put(`${API_URL}/api/announcements/${editMessageId}`, payload);
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === editMessageId
+            ? { ...m, ...formData, date: formData.publishDate, status: 'sent' }
+            : m
+        )
+      );
+      toast.success('Comunicado actualizado correctamente');
+    } else {
+      const res = await axios.post(`${API_URL}/api/announcements`, payload);
+      setMessages(prev => [
+        { id: res.data.id, ...formData, date: formData.publishDate, status: 'sent' },
+        ...prev
+      ]);
+      toast.success('Comunicado creado con éxito');
     }
-  };
+
+    setShowForm(false);
+    setEditMessageId(null);
+  } catch (error) {
+    console.error('❌ Error al enviar/editar mensaje:', error);
+    toast.error('Error al guardar el comunicado');
+  }
+};
 
   const handleDeleteMessage = async (id: number) => {
-    if (!confirm('¿Estás seguro de que querés eliminar este mensaje?')) return;
-    try {
-      await axios.delete(`${API_URL}/api/messages/${id}`);
-      setMessages(prev => prev.filter((msg) => msg.id !== id));
-    } catch (error) {
-      console.error('❌ Error al eliminar mensaje:', error);
-    }
-  };
+  if (!confirm('¿Estás seguro de que querés eliminar este mensaje?')) return;
+  try {
+    await axios.delete(`${API_URL}/api/announcements/${id}`);
+    setMessages(prev => prev.filter((msg) => msg.id !== id));
+    toast.success('Comunicado eliminado');
+  } catch (error) {
+    console.error('❌ Error al eliminar mensaje:', error);
+    toast.error('No se pudo eliminar el comunicado');
+  }
+};
+
 
   const filteredMessages = [...messages]
     .filter(message =>
@@ -191,7 +198,7 @@ export default function CommunicationPanel() {
       </div>
 
       {showForm && (
-        <MessageForm
+        <AnnouncementForm 
           onSubmit={handleSendMessage}
           onCancel={() => {
             setShowForm(false);

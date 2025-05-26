@@ -1,36 +1,77 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 interface ProgressFormProps {
   student: {
     id: number;
     nombre: string;
+    groupId: number; // 👈 agregalo
   };
+  groupId: number;
   onSubmit: (progress: {
     date: string;
     attendance: boolean;
     performance: 'Excelente' | 'Bueno' | 'Regular' | 'Necesita Mejorar';
     activities: string[];
     notes: string;
-  }) => void;
+  }) => Promise<void>;
   onCancel: () => void;
 }
 
-export default function ProgressForm({ student, onSubmit, onCancel }: ProgressFormProps) {
+
+export default function ProgressForm({ student, groupId, onSubmit, onCancel }: ProgressFormProps) {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     attendance: true,
-    performance: 'Bueno' as 'Excelente' | 'Bueno' | 'Regular' | 'Necesita Mejorar',
+    performance: '' as '' | 'Excelente' | 'Bueno' | 'Regular' | 'Necesita Mejorar',
     activities: [''],
     notes: ''
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleAttendanceChange = (attended: boolean) => {
+    if (!attended) {
+      setFormData({
+        ...formData,
+        attendance: false,
+        performance: 'Bueno', // default pero no visible
+        activities: [],
+        notes: ''
+      });
+    } else {
+      setFormData({
+        ...formData,
+        attendance: true,
+        activities: [''],
+        notes: ''
+      });
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
-      ...formData,
-      activities: formData.activities.filter(a => a.trim() !== '')
-    });
+
+    const cleanedProgress = {
+      studentId: student.id,
+      groupId, // 🔹 LO AGREGÁS ACÁ
+      date: formData.date,
+      attendance: formData.attendance,
+      performance: formData.attendance ? formData.performance : '',
+      activities: formData.attendance
+        ? formData.activities.filter((a) => a.trim() !== '')
+        : [],
+      notes: formData.attendance ? formData.notes : '',
+    };
+
+
+
+    try {
+      await onSubmit(cleanedProgress);
+      toast.success('✅ Progreso registrado con éxito');
+      onCancel();
+    } catch (error: any) {
+      toast.error(error?.message || '❌ Ocurrió un error al guardar el progreso');
+    }
   };
 
   const addActivity = () => {
@@ -64,7 +105,7 @@ export default function ProgressForm({ student, onSubmit, onCancel }: ProgressFo
             <label htmlFor="fecha" className="block text-sm font-medium text-gray-700">
               Fecha
             </label>
-<input
+            <input
               type="date"
               id="date"
               value={formData.date}
@@ -81,7 +122,7 @@ export default function ProgressForm({ student, onSubmit, onCancel }: ProgressFo
                 <input
                   type="radio"
                   checked={formData.attendance}
-                  onChange={() => setFormData({ ...formData, attendance: true })}
+                  onChange={() => handleAttendanceChange(true)}
                   className="form-radio text-indigo-600"
                 />
                 <span className="ml-2">Presente</span>
@@ -90,7 +131,7 @@ export default function ProgressForm({ student, onSubmit, onCancel }: ProgressFo
                 <input
                   type="radio"
                   checked={!formData.attendance}
-                  onChange={() => setFormData({ ...formData, attendance: false })}
+                  onChange={() => handleAttendanceChange(false)}
                   className="form-radio text-indigo-600"
                 />
                 <span className="ml-2">Ausente</span>
@@ -98,74 +139,78 @@ export default function ProgressForm({ student, onSubmit, onCancel }: ProgressFo
             </div>
           </div>
 
+          {formData.attendance && (
+            <>
+              <div>
+                <label htmlFor="performance" className="block text-sm font-medium text-gray-700">
+                  Desempeño
+                </label>
+                <select
+                  id="performance"
+                  value={formData.performance}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      performance: e.target.value as ProgressFormProps['onSubmit']['arguments'][0]['performance']
+                    })
+                  }
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                >
+                  <option value="Excelente">Excelente</option>
+                  <option value="Bueno">Bueno</option>
+                  <option value="Regular">Regular</option>
+                  <option value="Necesita Mejorar">Necesita Mejorar</option>
+                </select>
+              </div>
 
-          <div>
-            <label htmlFor="performance" className="block text-sm font-medium text-gray-700">
-              Desempeño
-            </label>
-            <select
-              id="performance"
-              value={formData.performance}
-              onChange={(e) =>
-                setFormData({ ...formData, performance: e.target.value as ProgressFormProps['onSubmit']['arguments'][0]['performance'] })
-              }
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            >
-              <option value="Excelente">Excelente</option>
-              <option value="Bueno">Bueno</option>
-              <option value="Regular">Regular</option>
-              <option value="Necesita Mejorar">Necesita Mejorar</option>
-            </select>
-          </div>
-
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Actividades Realizadas</label>
-            {formData.activities.map((actividad, index) => (
-              <div key={index} className="flex gap-2 mb-2">
-                <input
-                  type="text"
-                  value={actividad}
-                  onChange={(e) => {
-                    const newActivities = [...formData.activities];
-                    newActivities[index] = e.target.value;
-                    setFormData({ ...formData, activities: newActivities });
-                  }}
-                  className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  placeholder="Descripción de la actividad"
-                />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Actividades Realizadas</label>
+                {formData.activities.map((actividad, index) => (
+                  <div key={index} className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={actividad}
+                      onChange={(e) => {
+                        const newActivities = [...formData.activities];
+                        newActivities[index] = e.target.value;
+                        setFormData({ ...formData, activities: newActivities });
+                      }}
+                      className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      placeholder="Descripción de la actividad"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeActivity(index)}
+                      className="text-red-600 hover:text-red-700 px-2"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                ))}
                 <button
                   type="button"
-                  onClick={() => removeActivity(index)}
-                  className="text-red-600 hover:text-red-700 px-2"
+                  onClick={addActivity}
+                  className="mt-2 inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                 >
-                  <X className="h-5 w-5" />
+                  + Agregar Actividad
                 </button>
               </div>
-            ))}
-            <button
-              type="button"
-              onClick={addActivity}
-              className="mt-2 inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-            >
-              + Agregar Actividad
-            </button>
-          </div>
 
-            <div>
-            <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
-              Notas Adicionales
-            </label>
-            <textarea
-              id="notes"
-              rows={3}
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              placeholder="Observaciones, comentarios o recomendaciones..."
-            />
-          </div>
-
+              <div>
+                <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
+                  Notas Adicionales
+                </label>
+                <textarea
+                  id="notes"
+                  rows={3}
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  placeholder="Observaciones, comentarios o recomendaciones..."
+                />
+              </div>
+            </>
+          )}
 
           <div className="flex justify-end space-x-3 pt-4">
             <button

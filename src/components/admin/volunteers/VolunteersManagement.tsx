@@ -46,20 +46,20 @@ export default function VolunteersManagement() {
       const rawVolunteers = res.data.data;
 
       const mapped = rawVolunteers.map((volunteer: any) => {
-  const matched = disciplines.find(d => d.id === volunteer.discipline_id);
-  return {
-    ...volunteer,
-    name: `${volunteer.first_name || ''} ${volunteer.last_name || ''}`.trim(), // 👈 acá creás `name`
-    email: volunteer.email,
-    phone: volunteer.phone,
-    dni: volunteer.dni,
-    birthDate: volunteer.join_date,
-    discipline: matched?.name || 'Sin asignar',
-    specialization: matched?.category || '',
-    availability: [],
-    groups: []
-  };
-});
+        const matched = disciplines.find(d => d.id === volunteer.discipline_id);
+        return {
+          ...volunteer,
+          name: `${volunteer.first_name || ''} ${volunteer.last_name || ''}`.trim(), // 👈 acá creás `name`
+          email: volunteer.email,
+          phone: volunteer.phone,
+          dni: volunteer.dni,
+          birthDate: volunteer.join_date,
+          discipline: matched?.name || 'Sin asignar',
+          specialization: matched?.category || '',
+          availability: volunteer.availability || [],
+          groups: []
+        };
+      });
 
 
       setVolunteers(mapped);
@@ -87,8 +87,9 @@ export default function VolunteersManagement() {
     if (disciplines.length > 0) fetchVolunteers();
   }, [disciplines]);
 
-  const handleAddVolunteer = async (newVolunteer: Volunteer) => {
+  const handleAddVolunteer = async (newVolunteer: any) => {
     try {
+      console.log('🛫 Enviando voluntario al backend:', newVolunteer); // ← DEBUG
       const token = localStorage.getItem('token');
       await axios.post(`${API_URL}/api/volunteers`, newVolunteer, {
         headers: { Authorization: `Bearer ${token}` }
@@ -100,9 +101,10 @@ export default function VolunteersManagement() {
       const message = error?.response?.data?.message || 'Error al crear voluntario';
       toast.error(message);
       console.error('❌ Error al crear voluntario:', error);
+      console.error('📩 Respuesta del backend:', error?.response?.data);
     }
   };
-  
+
 
   const handleEditVolunteer = async (updatedVolunteer: Volunteer) => {
     try {
@@ -120,7 +122,7 @@ export default function VolunteersManagement() {
       console.error('❌ Error al editar voluntario:', error);
     }
   };
-  
+
 
   const handleDeleteVolunteer = async (id: number) => {
     try {
@@ -135,7 +137,7 @@ export default function VolunteersManagement() {
       console.error('❌ Error al eliminar voluntario:', error);
     }
   };
-  
+
 
   const filteredVolunteers = volunteers.filter((v) =>
     v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -214,9 +216,8 @@ export default function VolunteersManagement() {
                 <td className="px-6 py-4 text-sm text-gray-500">{volunteer.dni}</td>
                 <td className="px-6 py-4 text-sm text-gray-500">{volunteer.discipline}</td>
                 <td className="px-6 py-4">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    volunteer.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${volunteer.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
                     {volunteer.status === 'active' ? 'Activo' : 'Inactivo'}
                   </span>
                 </td>

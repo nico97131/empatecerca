@@ -54,19 +54,45 @@ export default function ProgressPanel() {
   }, []);
 
 
-  const progressData = progressRecords.map(progress => {
-    const student = students.find(s => s.id === progress.student_id);
-    const volunteer = volunteers.find(v => v.id === progress.volunteer_id);
+ const groupedProgress = students.map((student) => {
+  const studentProgress = progressRecords
+    .filter(p => p.student_id === student.id)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    return {
-      ...progress,
-      studentName: student ? `${student.firstName} ${student.lastName}` : '',
-      volunteerName: volunteer ? `${volunteer.firstName} ${volunteer.lastName}` : '',
-      volunteerRating: 0
-    };
-  });
+  if (studentProgress.length === 0) return null;
 
-  console.log('🧩 progressData generado:', progressData);
+  const latest = studentProgress[0];
+  const rating = ratings.find(r => r.id === latest.volunteer_id);
+
+  return {
+    studentId: student.id,
+    studentName: `${student.firstName} ${student.lastName}`,
+    latestEntry: {
+      id: latest.id,
+      attendance: latest.attendance,
+      performance: latest.performance,
+      activities: Array.isArray(latest.activities) ? latest.activities : [],
+      notes: latest.notes,
+      date: latest.date,
+      volunteerName: latest.volunteerName || 'Desconocido',
+      volunteerRating: Number(rating?.averageRating) || 0
+    },
+    history: studentProgress.map(p => {
+      const r = ratings.find(r => r.id === p.volunteer_id);
+      return {
+        id: p.id,
+        attendance: p.attendance,
+        performance: p.performance,
+        activities: Array.isArray(p.activities) ? p.activities : [],
+        notes: p.notes,
+        date: p.date,
+        volunteerName: p.volunteerName || 'Desconocido',
+        volunteerRating: Number(r?.averageRating) || 0
+      };
+    })
+  };
+}).filter(Boolean);
+
 
   const ratingsData = ratings.map((rating) => ({
     id: rating.volunteer_id,
@@ -127,9 +153,10 @@ export default function ProgressPanel() {
         />
       ) : (
         <StudentProgress
-          progress={progressData}
+          progress={groupedProgress}
           searchTerm={searchTerm}
         />
+
       )}
     </div>
   );

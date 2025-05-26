@@ -7,6 +7,7 @@ interface Group {
   id: number;
   name: string;
   discipline: string;
+  discipline_id: number;
   schedule: string;
 }
 
@@ -18,7 +19,7 @@ interface Volunteer {
   phone: string;
   dni: string;
   join_date: string;
-  discipline_id: number;
+  discipline_id: number | null;
   groups: string[];
   availability: string[];
   activeGroups: number;
@@ -56,22 +57,20 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
   });
 
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
+  const [newSlot, setNewSlot] = useState({ day: 'Lunes', time_from: '', time_to: '' });
   const [groups, setGroups] = useState<Group[]>([]);
+
 
   useEffect(() => {
     if (volunteer) {
-      const [first_name, ...rest] = (volunteer.name || '').split(' ');
-      const last_name = rest.join(' ');
-      
       setFormData({
         ...volunteer,
-        first_name,
-        last_name,
         join_date: formatDateInput(volunteer.join_date),
         groups: volunteer.groups || [],
         availability: volunteer.availability || [],
         inactive_reason: volunteer.inactive_reason
       });
+
     }
   }, [volunteer]);
 
@@ -109,7 +108,7 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
     };
     onSubmit(volunteer?.id ? { ...submitData, id: volunteer.id } : submitData);
   };
-  
+
 
   const handleGroupChange = (groupName: string) => {
     setFormData((prev) => {
@@ -134,6 +133,12 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
     }));
   };
 
+
+  const handleInputChange = (field: keyof Volunteer) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setFormData((prev) => ({ ...prev, [field]: e.target.value }));
+    };
+
   const formatDateInput = (dateString: string) => {
     const date = new Date(dateString);
     return date.toISOString().split('T')[0];
@@ -152,12 +157,12 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <InputField label="Nombre" id="first_name" value={formData.first_name} onChange={(e) => setFormData({ ...formData, first_name: e.target.value })} required />
-          <InputField label="Apellido" id="last_name" value={formData.last_name} onChange={(e) => setFormData({ ...formData, last_name: e.target.value })} required />
-          <InputField label="DNI" id="dni" value={formData.dni} type="text" pattern="[0-9]{8}" required title="DNI debe contener 8 números" onChange={(e) => setFormData({ ...formData, dni: e.target.value })} />
-          <InputField label="Fecha de Ingreso" id="join_date" value={formData.join_date} type="date" required onChange={(e) => setFormData({ ...formData, join_date: e.target.value })} />
-          <InputField label="Correo Electrónico" id="email" value={formData.email} type="email" required onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
-          <InputField label="Teléfono" id="phone" value={formData.phone} type="tel" required onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
+          <InputField label="Nombre" id="first_name" value={formData.first_name} onChange={handleInputChange('first_name')} required />
+          <InputField label="Apellido" id="last_name" value={formData.last_name} onChange={handleInputChange('last_name')} required />
+          <InputField label="DNI" id="dni" value={formData.dni} type="text" pattern="[0-9]{8}" required title="DNI debe contener 8 números" onChange={handleInputChange('dni')} />
+          <InputField label="Fecha de Ingreso" id="join_date" value={formData.join_date} type="date" required onChange={handleInputChange('join_date')} />
+          <InputField label="Correo Electrónico" id="email" value={formData.email} type="email" required onChange={handleInputChange('email')} />
+          <InputField label="Teléfono" id="phone" value={formData.phone} type="tel" required onChange={handleInputChange('phone')} />
 
           <div>
             <label htmlFor="discipline_id" className="block text-sm font-medium text-gray-700">Disciplina</label>
@@ -165,15 +170,15 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
               id="discipline_id"
               value={formData.discipline_id ?? ''}
               onChange={(e) => {
-              const value = e.target.value === '' ? null : parseInt(e.target.value);
-              setFormData({ ...formData, discipline_id: value, groups: [], activeGroups: 0 });
-            }}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-          >
-            <option value="">Sin disciplina asignada</option>
-            {disciplines.map((d) => (
-            <option key={d.id} value={d.id}>{d.name}</option>
-          ))}
+                const value = e.target.value === '' ? null : parseInt(e.target.value);
+                setFormData({ ...formData, discipline_id: value, groups: [], activeGroups: 0 });
+              }}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="">Sin disciplina asignada</option>
+              {disciplines.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
             </select>
 
           </div>
@@ -230,6 +235,86 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
 
             </div>
           )}
+<div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">Disponibilidad</label>
+
+  <div className="flex flex-wrap items-center gap-2 mb-3">
+    <select
+      value={newSlot.day}
+      onChange={(e) => setNewSlot({ ...newSlot, day: e.target.value })}
+      className="w-28 border border-gray-300 rounded-md px-2 py-1 text-sm shadow-sm"
+    >
+      {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((day) => (
+        <option key={day} value={day}>{day}</option>
+      ))}
+    </select>
+
+    <input
+      type="time"
+      value={newSlot.time_from}
+      onChange={(e) => setNewSlot({ ...newSlot, time_from: e.target.value })}
+      className="w-24 border border-gray-300 rounded-md px-2 py-1 text-sm shadow-sm"
+    />
+
+    <span className="text-sm text-gray-600">a</span>
+
+    <input
+      type="time"
+      value={newSlot.time_to}
+      onChange={(e) => setNewSlot({ ...newSlot, time_to: e.target.value })}
+      className="w-24 border border-gray-300 rounded-md px-2 py-1 text-sm shadow-sm"
+    />
+
+    <button
+      type="button"
+      onClick={() => {
+        if (newSlot.time_from && newSlot.time_to) {
+          const formatted = `${newSlot.day} de ${newSlot.time_from} a ${newSlot.time_to}`;
+          if (!formData.availability.includes(formatted)) {
+            setFormData((prev) => ({
+              ...prev,
+              availability: [...prev.availability, formatted]
+            }));
+          }
+          setNewSlot({ day: 'Lunes', time_from: '', time_to: '' });
+        }
+      }}
+      className="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 transition"
+    >
+      Agregar
+    </button>
+  </div>
+
+  {formData.availability.length === 0 ? (
+    <p className="text-sm text-gray-500 italic">Sin horarios cargados.</p>
+  ) : (
+    <ul className="space-y-1 text-sm">
+      {formData.availability.map((slot, idx) => (
+        <li
+          key={idx}
+          className="flex justify-between items-center bg-gray-100 px-3 py-2 rounded-md shadow-sm"
+        >
+          <span className="text-gray-700">{slot}</span>
+          <button
+            type="button"
+            onClick={() =>
+              setFormData((prev) => ({
+                ...prev,
+                availability: prev.availability.filter((_, i) => i !== idx)
+              }))
+            }
+            className="text-red-500 hover:text-red-700"
+            title="Eliminar"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </li>
+      ))}
+    </ul>
+  )}
+</div>
+
+
 
           <div className="flex justify-end space-x-3 pt-4">
             <button

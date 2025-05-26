@@ -50,7 +50,7 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
     birthDate: '',
     tutorId: 0,
     discipline: 0,
-    groupId: 0
+    groupIds: [] as number[],
   });
 
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
@@ -59,6 +59,7 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
   const [tutorSearchTerm, setTutorSearchTerm] = useState('');
   const [dniError, setDniError] = useState('');
   const [showTutorSearch, setShowTutorSearch] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<number>(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -87,7 +88,7 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
             birthDate: formattedDate,
             tutorId: student.tutorId,
             discipline: disciplineId,
-            groupId: student.groupId || 0
+            groupIds: Array.isArray(student.groupId) ? student.groupId : student.groupId ? [student.groupId] : []
           });
         }
       } catch (error) {
@@ -115,7 +116,7 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
     const submitData = {
       ...formData,
       discipline: formData.discipline || undefined,
-      groupId: formData.groupId || undefined
+groupIds: formData.groupIds || []
     };
     onSubmit(student ? { ...submitData, id: student.id } : submitData);
   };
@@ -127,7 +128,7 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
   const filteredTutors = tutors.filter(tutor =>
     tutorSearchTerm
       ? tutor.name.toLowerCase().includes(tutorSearchTerm.toLowerCase()) ||
-        tutor.dni.includes(tutorSearchTerm)
+      tutor.dni.includes(tutorSearchTerm)
       : true
   );
 
@@ -160,9 +161,8 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
                 setFormData({ ...formData, dni: value });
                 if (value.length === 8) validateDNI(value);
               }}
-              className={`mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 sm:text-sm ${
-                dniError ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-indigo-500'
-              }`}
+              className={`mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 sm:text-sm ${dniError ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-indigo-500'
+                }`}
               required
               maxLength={8}
               pattern="[0-9]{8}"
@@ -243,25 +243,74 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
           </div>
 
           {formData.discipline !== 0 && (
-            <div>
-              <label htmlFor="groupId" className="block text-sm font-medium text-gray-700">Grupo</label>
-              <select
-                id="groupId"
-                value={formData.groupId}
-                onChange={(e) => setFormData({ ...formData, groupId: Number(e.target.value) })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              >
-                <option value={0}>Sin asignación</option>
-                {groups
-                  .filter(group => group.discipline_id === formData.discipline)
-                  .map(group => (
-                    <option key={group.id} value={group.id}>
-                      {disciplines.find(d => d.id === group.discipline_id)?.name || 'Disciplina'} - {group.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-          )}
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-1">Grupos asignados</label>
+    
+    {/* Selector y botón agregar */}
+    <div className="flex items-center space-x-2">
+      <select
+        value={selectedGroupId}
+        onChange={(e) => setSelectedGroupId(Number(e.target.value))}
+        className="border rounded-md px-2 py-1 text-sm w-full"
+      >
+        <option value={0}>Seleccionar grupo</option>
+        {groups
+          .filter(group => group.discipline_id === formData.discipline)
+          .map(group => (
+            <option key={group.id} value={group.id}>
+              {group.name}
+            </option>
+          ))}
+      </select>
+      <button
+        type="button"
+        onClick={() => {
+          if (
+            selectedGroupId !== 0 &&
+            !formData.groupIds.includes(selectedGroupId)
+          ) {
+            setFormData(prev => ({
+              ...prev,
+              groupIds: [...prev.groupIds, selectedGroupId]
+            }));
+            setSelectedGroupId(0);
+          }
+        }}
+        className="px-2 py-1 bg-indigo-600 text-white rounded text-sm"
+      >
+        Agregar
+      </button>
+    </div>
+
+    {/* Lista de grupos seleccionados */}
+    <ul className="mt-2 space-y-1 text-sm">
+      {formData.groupIds.map((groupId, index) => {
+        const group = groups.find(g => g.id === groupId);
+        return (
+          <li
+            key={groupId}
+            className="flex justify-between items-center bg-gray-100 px-3 py-1 rounded"
+          >
+            {group?.name || 'Grupo'}
+            <button
+              type="button"
+              onClick={() =>
+                setFormData(prev => ({
+                  ...prev,
+                  groupIds: prev.groupIds.filter(id => id !== groupId)
+                }))
+              }
+              className="text-red-500"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  </div>
+)}
+
 
           <div className="flex justify-end space-x-3 pt-4">
             <button

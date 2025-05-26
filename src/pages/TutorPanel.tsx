@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { User, TrendingUp, LogOut, MessageSquare, FileText } from 'lucide-react';
 import MessagingPanel from '../components/tutor/MessagingPanel';
@@ -6,6 +6,7 @@ import ProgressHistory from '../components/tutor/ProgressHistory';
 import MedicalRecordForm from '../components/tutor/MedicalRecordForm';
 import axios from 'axios';
 import { API_URL } from '../config';
+import { toast } from 'react-hot-toast';
 
 interface Student {
   id: number;
@@ -16,8 +17,6 @@ interface Student {
   tutorId: number;
   discipline?: string;
   groupId?: number;
-
-  // Campos traídos desde medical_records
   diagnosis?: string;
   allergies?: string;
   medications?: string;
@@ -27,11 +26,13 @@ interface Student {
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   emergencyContactRelation?: string;
-
-  // Campos del JOIN con tutor (si querés también)
   tutorName?: string;
   tutorPhone?: string;
   disciplineName?: string;
+  tutorDni?: string;
+  groupIds?: number[];
+  groupName?: string;
+
 }
 
 interface Volunteer {
@@ -40,7 +41,7 @@ interface Volunteer {
   last_name: string;
   email: string;
   rating?: number;
-  groupId?: number; // si tenés asignación explícita, mejor aún
+  groupId?: number;
 }
 
 interface Alumno {
@@ -72,7 +73,8 @@ interface Alumno {
     };
   };
   discipline?: string;
-  groupId?: number;
+  groupId?: number; // lo podés mantener si en algún momento querés usarlo para matcheo interno
+  groupNames?: string; // ✅ este es el campo que usás en el rende // en vez de usar groupId si ya no lo necesitás
 }
 
 interface Group {
@@ -92,12 +94,12 @@ const safeParseArray = (value?: string): string[] => {
   }
 };
 
-
 export default function TutorPanel() {
   const { user, logout } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'messages'>('overview');
   const [selectedAlumno, setSelectedAlumno] = useState<Alumno | null>(null);
   const [showProgress, setShowProgress] = useState(false);
@@ -107,18 +109,35 @@ export default function TutorPanel() {
     const fetchData = async () => {
       const token = localStorage.getItem('token');
       try {
-        const [studentsRes, groupsRes] = await Promise.all([
-          axios.get(`${API_URL}/api/students`, {
-            headers: { Authorization: `Bearer ${token}` }
-          }),
-          axios.get(`${API_URL}/api/groups`, {
-            headers: { Authorization: `Bearer ${token}` }
-          }),
-
+        const [studentsRes, groupsRes, announcementsRes] = await Promise.all([
+          axios.get(`${API_URL}/api/students`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_URL}/api/groups`, { headers: { Authorization: `Bearer ${token}` } }),
+          //axios.get(`${API_URL}/api/volunteers`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_URL}/api/announcements`, { headers: { Authorization: `Bearer ${token}` } }),
         ]);
+
+       // setVolunteers(volunteersRes.data.data);
+
+
+        const filtrados = announcementsRes.data.data.filter((a: any) => {
+          let destinatarios: string[] = [];
+          if (Array.isArray(a.recipients)) {
+            destinatarios = a.recipients;
+          } else if (typeof a.recipients === 'string') {
+            try {
+              const parsed = JSON.parse(a.recipients);
+              if (Array.isArray(parsed)) destinatarios = parsed;
+            } catch {
+              console.warn(`⚠️ Recipients no es un array válido en anuncio ${a.id}:`, a.recipients);
+            }
+          }
+          return destinatarios.some((r) => ['tutores', 'todos'].includes(String(r).toLowerCase().trim()));
+        });
+
         setStudents(studentsRes.data.data);
         setGroups(groupsRes.data.data);
         setVolunteers([]);
+        setAnnouncements(filtrados);
       } catch (error) {
         console.error('❌ Error al obtener datos:', error);
       }
@@ -126,35 +145,28 @@ export default function TutorPanel() {
     fetchData();
   }, []);
 
-  const getVolunteerByGroup = (groupId?: number) => {
+  const getVolunteerByGroupId = (groupId?: number): Volunteer | undefined => {
     if (!groupId) return undefined;
-    return volunteers.find(v => v.groupId === groupId); // O ajustá esto según tu lógica real
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return undefined;
+    return volunteers.find(v => v.groupId === groupId); // esto asume que tenés el campo `groupId` en los voluntarios
   };
 
-  const myStudents: Alumno[] = students
-  .filter(student => student.tutorDni === user?.dni)
-  
-  .map(student => {
-    const assignedVolunteer = getVolunteerByGroup(student.groupId);
+
+  const buildAlumno = (student: Student): Alumno => {
     return {
       id: student.id,
       nombre: `${student.firstName} ${student.lastName}`,
-      progreso: [
-        {
-          fecha: '2024-03-15',
-          asistencia: true,
-          desempeño: 'Excelente',
-          actividades: ['Práctica deportiva', 'Ejercicios de respiración'],
-          notas: 'Excelente manejo de su condición durante la actividad'
-        }
-      ],
-      voluntario: {
-        nombre: assignedVolunteer
-          ? `${assignedVolunteer.first_name} ${assignedVolunteer.last_name}`
-          : 'Voluntario Asignado',
-        email: assignedVolunteer?.email || 'voluntario@empate.org',
-        rating: assignedVolunteer?.rating || 4.5
-      },
+      progreso: [], // se va a cargar en el componente ProgressHistory
+      voluntario: (() => {
+        const v = getVolunteerByGroupId(student.groupIds?.[0]);
+        return {
+          nombre: v ? `${v.first_name} ${v.last_name}` : 'Voluntario Asignado',
+          email: v?.email || 'voluntario@empate.org',
+          rating: v?.rating || undefined,
+        };
+      })(),
+
       fichamedica: {
         alergias: safeParseArray(student.allergies),
         medicamentos: safeParseArray(student.medications),
@@ -167,11 +179,20 @@ export default function TutorPanel() {
           telefono: student.emergencyContactPhone || 'No disponible',
           relacion: student.emergencyContactRelation || 'Tutor/a'
         }
-      },      
+      },
       discipline: student.disciplineName,
-      groupId: student.groupId
+      groupId: student.groupIds?.[0],
+      groupNames: student.groupName,
     };
-  });
+  };
+
+
+  const myStudents = useMemo(() => {
+    return students
+      .filter(student => student.tutorDni === user?.dni)
+      .map(buildAlumno);
+  }, [students, volunteers, user?.dni]);
+
 
   const handleSendMessage = (message: any) => {
     console.log('Sending message:', message);
@@ -181,9 +202,8 @@ export default function TutorPanel() {
     console.log('Rating volunteer for student:', studentId, 'with rating:', rating);
   };
 
-  const handleUpdateMedicalRecord = async (record: MedicalRecord) => {
+  const handleUpdateMedicalRecord = async (record: any) => {
     if (!selectedAlumno) return;
-  
     const token = localStorage.getItem('token');
     try {
       await axios.put(`${API_URL}/api/students/${selectedAlumno.id}/medical-record`, {
@@ -199,19 +219,52 @@ export default function TutorPanel() {
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-  
-      console.log('✅ Ficha médica actualizada correctamente');
+
+      await axios.put(`${API_URL}/api/students/${selectedAlumno.id}/medical-record`, {
+        diagnosis: record.condiciones[0] || '',
+        allergies: JSON.stringify(record.alergias),
+        medications: JSON.stringify(record.medicamentos),
+        observations: record.observaciones,
+        bloodType: record.grupoSanguineo || '',
+        emergencyContactName: record.contactoEmergencia.nombre,
+        emergencyContactPhone: record.contactoEmergencia.telefono,
+        emergencyContactRelation: record.contactoEmergencia.relacion,
+        lastUpdate: new Date().toISOString().split('T')[0],
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setStudents(prev =>
+        prev.map(s =>
+          s.id === selectedAlumno.id
+            ? {
+              ...s,
+              diagnosis: record.condiciones[0] || '',
+              allergies: JSON.stringify(record.alergias),
+              medications: JSON.stringify(record.medicamentos),
+              observations: record.observaciones,
+              bloodType: record.grupoSanguineo || '',
+              emergencyContactName: record.contactoEmergencia.nombre,
+              emergencyContactPhone: record.contactoEmergencia.telefono,
+              emergencyContactRelation: record.contactoEmergencia.relacion,
+              lastUpdate: new Date().toISOString().split('T')[0],
+            }
+            : s
+        )
+      );
+
+      setSelectedAlumno({
+        ...selectedAlumno,
+        fichamedica: record
+      });
+
+      toast.success('Ficha médica actualizada correctamente');
       setShowMedicalRecord(false);
-      setSelectedAlumno(null);
-  
-      // Si querés, podrías hacer un fetch de students otra vez para refrescar la ficha 👇
-      // fetchStudents();
-  
     } catch (error) {
       console.error('❌ Error actualizando ficha médica:', error);
+      toast.error('Error al actualizar la ficha médica');
     }
   };
-  
 
   const getGroupName = (groupId?: number) => {
     if (!groupId) return 'Sin asignación';
@@ -246,32 +299,33 @@ export default function TutorPanel() {
           <nav className="-mb-px flex space-x-8">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${
-                activeTab === 'overview'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${activeTab === 'overview' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
             >
-              <User className={`-ml-0.5 mr-2 h-5 w-5 ${
-                activeTab === 'overview' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'
-              }`} />
+              <User className={`-ml-0.5 mr-2 h-5 w-5 ${activeTab === 'overview' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'}`} />
               Vista General
             </button>
             <button
               onClick={() => setActiveTab('messages')}
-              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${
-                activeTab === 'messages'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+              className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${activeTab === 'messages' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
             >
-              <MessageSquare className={`-ml-0.5 mr-2 h-5 w-5 ${
-                activeTab === 'messages' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'
-              }`} />
+              <MessageSquare className={`-ml-0.5 mr-2 h-5 w-5 ${activeTab === 'messages' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'}`} />
               Mensajes
             </button>
           </nav>
         </div>
+
+        {activeTab === 'overview' && announcements.length > 0 && (
+          <div className="space-y-4 mb-6">
+            <h2 className="text-lg font-semibold text-gray-900">📢 Comunicados</h2>
+            {announcements.map((a) => (
+              <div key={a.id} className="bg-blue-50 border-l-4 border-blue-500 p-4 shadow rounded-lg">
+                <h4 className="text-md font-semibold text-blue-800">{a.subject}</h4>
+                <p className="text-sm text-gray-700 mt-1">{a.content}</p>
+                <p className="text-xs text-gray-500 mt-2">📅 Publicado: {new Date(a.publication_date).toLocaleDateString()}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         {activeTab === 'overview' ? (
           <div className="space-y-6">
@@ -280,16 +334,10 @@ export default function TutorPanel() {
                 <div className="px-4 py-5 sm:px-6">
                   <div className="flex justify-between items-center">
                     <div>
-                      <h3 className="text-lg leading-6 font-medium text-gray-900">
-                        {alumno.nombre}
-                      </h3>
+                      <h3 className="text-lg leading-6 font-medium text-gray-900">{alumno.nombre}</h3>
                       <div className="mt-1 space-y-1">
-                        <p className="text-sm text-gray-500">
-                          Disciplina: {alumno.discipline || 'Sin asignación'}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          Grupo: {getGroupName(alumno.groupId)}
-                        </p>
+                        <p className="text-sm text-gray-500">Disciplina: {alumno.discipline || 'Sin asignación'}</p>
+                        <p className="text-sm text-gray-500">Grupo: {alumno.groupNames || 'Sin asignación'}</p>
                       </div>
                     </div>
                     <div className="flex space-x-4">
@@ -320,7 +368,9 @@ export default function TutorPanel() {
                   <div className="border-t border-gray-200">
                     <div className="px-4 py-5 sm:px-6">
                       <ProgressHistory
-                        student={alumno}
+                        studentId={alumno.id}
+                        studentName={alumno.nombre}
+                        volunteer={alumno.voluntario}
                         onRateVolunteer={handleRateVolunteer}
                       />
                     </div>
@@ -330,10 +380,7 @@ export default function TutorPanel() {
             ))}
           </div>
         ) : (
-          <MessagingPanel
-            students={myStudents}
-            onSendMessage={handleSendMessage}
-          />
+          <MessagingPanel students={myStudents} onSendMessage={handleSendMessage} />
         )}
       </div>
 
@@ -343,7 +390,6 @@ export default function TutorPanel() {
           onSubmit={handleUpdateMedicalRecord}
           onCancel={() => {
             setShowMedicalRecord(false);
-            setSelectedAlumno(null);
           }}
         />
       )}

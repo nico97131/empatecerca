@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Calendar, TrendingUp, Star } from 'lucide-react';
+import { Calendar, Star } from 'lucide-react';
 import axios from 'axios';
 import { API_URL } from '../../config';
 
@@ -9,24 +9,29 @@ interface ProgressEntry {
   performance: string;
   activities: string[];
   notes: string;
+  score?: number;
 }
 
 interface ProgressHistoryProps {
   studentId: number;
   studentName: string;
-  volunteer: {
+  volunteer?: {
     nombre: string;
     email: string;
-    rating?: number;
   };
   onRateVolunteer: (studentId: number, rating: number) => void;
 }
 
-export default function ProgressHistory({ studentId, studentName, volunteer, onRateVolunteer }: ProgressHistoryProps) {
+export default function ProgressHistory({
+  studentId,
+  studentName,
+  volunteer,
+  onRateVolunteer
+}: ProgressHistoryProps) {
   const [entries, setEntries] = useState<ProgressEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showRatingModal, setShowRatingModal] = useState(false);
-  const [rating, setRating] = useState(volunteer.rating || 0);
+  const [rating, setRating] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchProgress = async () => {
@@ -41,10 +46,20 @@ export default function ProgressHistory({ studentId, studentName, volunteer, onR
           attendance: entry.attendance,
           performance: entry.performance,
           activities: typeof entry.activities === 'string' ? JSON.parse(entry.activities) : [],
-          notes: entry.notes
+          notes: entry.notes,
+          score: entry.score ?? null
         }));
 
         setEntries(data);
+
+        // 🔢 Calcular promedio de score si hay
+        const validScores = data.map(e => e.score).filter((s): s is number => typeof s === 'number');
+        if (validScores.length > 0) {
+          const average = validScores.reduce((sum, s) => sum + s, 0) / validScores.length;
+          setRating(Math.round(average));
+        } else {
+          setRating(null);
+        }
       } catch (error) {
         console.error('❌ Error al obtener el historial:', error);
       } finally {
@@ -56,13 +71,23 @@ export default function ProgressHistory({ studentId, studentName, volunteer, onR
   }, [studentId]);
 
   const handleRating = () => {
-    onRateVolunteer(studentId, rating);
+    if (rating !== null) {
+      onRateVolunteer(studentId, rating);
+    }
     setShowRatingModal(false);
   };
 
+  if (!volunteer) {
+    return (
+      <div className="bg-yellow-100 text-yellow-800 px-4 py-3 rounded shadow">
+        No hay un voluntario asignado a este alumno.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Sección de calificación del voluntario */}
+      {/* Voluntario y calificación */}
       <div className="bg-white shadow sm:rounded-lg">
         <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
           <div>
@@ -77,19 +102,24 @@ export default function ProgressHistory({ studentId, studentName, volunteer, onR
             Calificar
           </button>
         </div>
-        {volunteer.rating && (
+        {rating !== null && (
           <div className="border-t px-4 py-3">
             <div className="flex items-center">
-              {[1, 2, 3, 4, 5].map(star => (
-                <Star key={star} className={`h-5 w-5 ${star <= volunteer.rating ? 'text-yellow-400' : 'text-gray-300'}`} />
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Star
+                  key={star}
+                  className={`h-5 w-5 ${star <= rating ? 'text-yellow-400' : 'text-gray-300'}`}
+                />
               ))}
-              <span className="ml-2 text-sm text-gray-600">Calificación actual: {volunteer.rating}</span>
+              <span className="ml-2 text-sm text-gray-600">
+                Calificación promedio: {rating}
+              </span>
             </div>
           </div>
         )}
       </div>
 
-      {/* Historial de progreso */}
+      {/* Historial */}
       <div className="bg-white shadow sm:rounded-lg">
         <div className="px-4 py-5 sm:px-6">
           <h3 className="text-lg font-medium text-gray-900">Historial de Progreso</h3>
@@ -108,7 +138,11 @@ export default function ProgressHistory({ studentId, studentName, volunteer, onR
                       <Calendar className="h-5 w-5 text-gray-400 mr-2" />
                       <span className="text-sm font-medium">{entry.date}</span>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded-full ${entry.attendance ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    <span
+                      className={`text-xs px-2 py-1 rounded-full ${
+                        entry.attendance ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}
+                    >
                       {entry.attendance ? 'Presente' : 'Ausente'}
                     </span>
                   </div>
@@ -116,6 +150,9 @@ export default function ProgressHistory({ studentId, studentName, volunteer, onR
                     <p><strong>Desempeño:</strong> {entry.performance}</p>
                     <p><strong>Actividades:</strong> {entry.activities.join(', ')}</p>
                     <p><strong>Notas:</strong> {entry.notes}</p>
+                    {typeof entry.score === 'number' && (
+                      <p><strong>Calificación:</strong> {entry.score}</p>
+                    )}
                   </div>
                 </li>
               ))}
@@ -130,15 +167,25 @@ export default function ProgressHistory({ studentId, studentName, volunteer, onR
           <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
             <h3 className="text-lg font-medium mb-4">Calificar a {volunteer.nombre}</h3>
             <div className="flex justify-center space-x-2 mb-6">
-              {[1, 2, 3, 4, 5].map(star => (
+              {[1, 2, 3, 4, 5].map((star) => (
                 <button key={star} onClick={() => setRating(star)}>
-                  <Star className={`h-8 w-8 ${star <= rating ? 'text-yellow-400' : 'text-gray-300'}`} />
+                  <Star className={`h-8 w-8 ${star <= (rating ?? 0) ? 'text-yellow-400' : 'text-gray-300'}`} />
                 </button>
               ))}
             </div>
             <div className="flex justify-end space-x-3">
-              <button onClick={() => setShowRatingModal(false)} className="px-4 py-2 border rounded-md text-sm bg-white">Cancelar</button>
-              <button onClick={handleRating} className="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm">Guardar</button>
+              <button
+                onClick={() => setShowRatingModal(false)}
+                className="px-4 py-2 border rounded-md text-sm bg-white"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRating}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm"
+              >
+                Guardar
+              </button>
             </div>
           </div>
         </div>

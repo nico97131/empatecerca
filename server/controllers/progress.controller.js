@@ -35,7 +35,7 @@ export const getStudentProgress = async (req, res) => {
       LEFT JOIN volunteers v ON p.volunteer_id = v.id
       WHERE p.student_id = ?
       ORDER BY p.date DESC
-    `, [req.params.studentId]);    
+    `, [req.params.studentId]);
     res.json({ success: true, count: rows.length, data: rows });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -53,7 +53,7 @@ export const getGroupProgress = async (req, res) => {
       JOIN volunteers v ON p.volunteer_id = v.id
       WHERE s.group_id = ?
       ORDER BY p.date DESC
-    `, [req.params.groupId]);    
+    `, [req.params.groupId]);
     res.json({ success: true, count: rows.length, data: rows });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -68,6 +68,7 @@ export const createProgress = async (req, res) => {
 
     const {
       studentId,
+      groupId,
       date,
       attendance,
       performance,
@@ -89,17 +90,33 @@ export const createProgress = async (req, res) => {
     }
 
     const volunteerId = volunteerRows[0].id;
+    // Antes de insertar el nuevo progreso
+    const [existing] = await pool.query(
+      `SELECT id FROM progress 
+   WHERE student_id = ? AND group_id = ? AND date = ?`,
+      [studentId, groupId, date] // 👈 agregás groupId acá también
+    );
+
+
+    if (existing.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ya existe una evaluación registrada para este alumno en esa fecha.'
+      });
+    }
+
 
     const [result] = await pool.query(
       `INSERT INTO progress 
-        (student_id, volunteer_id, date, attendance, performance, activities, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (student_id, volunteer_id, group_id, date, attendance, performance, activities, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         studentId,
         volunteerId,
+        groupId,
         date,
         attendance,
-        performance,
+        performance || null,
         JSON.stringify(activities),
         notes || null,
       ]
@@ -107,11 +124,24 @@ export const createProgress = async (req, res) => {
 
     console.log("✅ Registro de progreso insertado con ID:", result.insertId);
 
+    // Obtener el progreso recién insertado con los nombres
+    const [inserted] = await pool.query(
+      `SELECT p.*, 
+          CONCAT(s.firstName, ' ', s.lastName) AS studentName,
+          CONCAT(v.first_name, ' ', v.last_name) AS volunteerName
+   FROM progress p
+   LEFT JOIN students s ON p.student_id = s.id
+   LEFT JOIN volunteers v ON p.volunteer_id = v.id
+   WHERE p.id = ?`,
+      [result.insertId]
+    );
+
     res.status(201).json({
       success: true,
       message: "Progreso creado correctamente",
-      id: result.insertId,
+      data: inserted[0]
     });
+
   } catch (error) {
     console.error("❌ Error en createProgress:", error);
     res.status(500).json({

@@ -6,7 +6,7 @@ import GroupsManagement from '../components/admin/groups/GroupsManagement';
 import DisciplinesManagement from '../components/admin/disciplines/DisciplinesManagement';
 import VolunteersManagement from '../components/admin/volunteers/VolunteersManagement';
 import UserManagement from '../components/admin/users/UserManagement';
-import CommunicationPanel from '../components/admin/communication/CommunicationPanel';
+import CommunicationPanel from '../components/admin/communication/AnnouncementsPanel.tsx';
 import ProgressPanel from '../components/admin/progress/ProgressPanel';
 import TutorManagement from '../components/tutor/TutorManagement.tsx';
 import StudentManagement from '../components/admin/students/StudentManagement';

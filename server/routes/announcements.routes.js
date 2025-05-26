@@ -5,8 +5,7 @@ import {
   updateMessage,
   getExpiredMessages,
   deleteMessage  
-
-} from '../controllers/message.controller.js';
+} from '../controllers/announcements.controller.js';
 
 const router = express.Router();
 
