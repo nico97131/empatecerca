@@ -1,32 +1,30 @@
 import db from '../config/db.js';
 
 // 🔧 Crear usuario desde tutor
-async function createUserFromTutor(tutor) {
+async function createUserFromTutor({ id, name, dni, email }) {
   try {
-    const nombreNormalizado = tutor.name
+    const nombreNormalizado = name
       .toLowerCase()
       .normalize('NFD')
       .replace(/\p{Diacritic}/gu, '')
       .replace(/ /g, '.')
       .replace(/[^a-zA-Z0-9.]/g, '');
 
-    const email = `${nombreNormalizado}@empate.org`;
+    const finalEmail = email || `${nombreNormalizado}@empate.org`;
 
-    const [existingUser] = await db.query('SELECT id FROM users WHERE dni = ?', [tutor.dni]);
+    const [existingUser] = await db.query('SELECT id FROM users WHERE dni = ?', [dni]);
     if (existingUser.length > 0) {
       console.log('⚠️ Ya existe un usuario con este DNI. No se crea otro.');
       return;
     }
 
-await db.query(
-  `INSERT INTO users (name, email, dni, password, role, status)
-   VALUES (?, ?, ?, ?, 'tutor', 'active')`,
-  [tutor.name, email, tutor.dni, tutor.dni]
-);
+    await db.query(
+      `INSERT INTO users (name, email, dni, password, role, status)
+       VALUES (?, ?, ?, ?, 'tutor', 'active')`,
+      [name, finalEmail, dni, dni]
+    );
 
-
-
-    console.log(`✅ Usuario creado automáticamente para tutor con email ${email}`);
+    console.log(`✅ Usuario creado automáticamente para tutor con email ${finalEmail}`);
   } catch (err) {
     console.error('❌ Error al crear usuario desde tutor:', err);
   }
@@ -39,8 +37,6 @@ export const createTutor = async (req, res) => {
 
   try {
     const { name, dni, email, phone, wantsUser } = req.body;
-
-    console.log('🔍 wantsUser:', wantsUser);
 
     const [existingTutor] = await db.query('SELECT id FROM tutors WHERE dni = ?', [dni]);
     if (existingTutor.length > 0) {
@@ -57,7 +53,12 @@ export const createTutor = async (req, res) => {
     );
 
     if (Number(wantsUser) === 1) {
-      await createUserFromTutor({ name, dni });
+      await createUserFromTutor({
+        id: result.insertId,
+        name,
+        dni,
+        email
+      });
     }
 
     res.status(201).json({
@@ -95,19 +96,22 @@ export const getAllTutors = async (req, res) => {
 export const updateTutor = async (req, res) => {
   const { id } = req.params;
   const { name, dni, email, phone, wantsUser } = req.body;
-  console.log('🔍 wantsUser:', wantsUser);
 
   try {
     await db.query(
       `UPDATE tutors
-   SET name = ?, dni = ?, email = ?, phone = ?, wantsUser = ?
-   WHERE id = ?`,
+       SET name = ?, dni = ?, email = ?, phone = ?, wantsUser = ?
+       WHERE id = ?`,
       [name, dni, email || null, phone || null, wantsUser ? 1 : 0, id]
     );
 
-
     if (wantsUser === true) {
-      await createUserFromTutor({ name, dni });
+      await createUserFromTutor({
+        id,
+        name,
+        dni,
+        email
+      });
     }
 
     res.json({ success: true, message: 'Tutor actualizado correctamente' });

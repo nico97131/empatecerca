@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Calendar, Star } from 'lucide-react';
 import axios from 'axios';
 import { API_URL } from '../../config';
+import { useAuth } from '../../contexts/AuthContext';
+import { toast } from 'react-hot-toast';
 
 interface ProgressEntry {
   date: string;
@@ -15,11 +17,13 @@ interface ProgressEntry {
 interface ProgressHistoryProps {
   studentId: number;
   studentName: string;
-  volunteer?: {
+  volunteer: Array<{
+    id: number;
     nombre: string;
     email: string;
-  };
-  onRateVolunteer: (studentId: number, rating: number) => void;
+    rating?: number;
+  }>;
+  onRateVolunteer: (studentId: number, volunteerEmail: string, rating: number) => void;
 }
 
 export default function ProgressHistory({
@@ -30,8 +34,8 @@ export default function ProgressHistory({
 }: ProgressHistoryProps) {
   const [entries, setEntries] = useState<ProgressEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showRatingModal, setShowRatingModal] = useState(false);
-  const [rating, setRating] = useState<number | null>(null);
+
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchProgress = async () => {
@@ -51,15 +55,6 @@ export default function ProgressHistory({
         }));
 
         setEntries(data);
-
-        // 🔢 Calcular promedio de score si hay
-        const validScores = data.map(e => e.score).filter((s): s is number => typeof s === 'number');
-        if (validScores.length > 0) {
-          const average = validScores.reduce((sum, s) => sum + s, 0) / validScores.length;
-          setRating(Math.round(average));
-        } else {
-          setRating(null);
-        }
       } catch (error) {
         console.error('❌ Error al obtener el historial:', error);
       } finally {
@@ -70,55 +65,10 @@ export default function ProgressHistory({
     fetchProgress();
   }, [studentId]);
 
-  const handleRating = () => {
-    if (rating !== null) {
-      onRateVolunteer(studentId, rating);
-    }
-    setShowRatingModal(false);
-  };
-
-  if (!volunteer) {
-    return (
-      <div className="bg-yellow-100 text-yellow-800 px-4 py-3 rounded shadow">
-        No hay un voluntario asignado a este alumno.
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
-      {/* Voluntario y calificación */}
-      <div className="bg-white shadow sm:rounded-lg">
-        <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
-          <div>
-            <h3 className="text-lg font-medium text-gray-900">Voluntario Asignado</h3>
-            <p className="text-sm text-gray-500">{volunteer.nombre}</p>
-          </div>
-          <button
-            onClick={() => setShowRatingModal(true)}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-md shadow-sm"
-          >
-            <Star className="h-4 w-4 mr-2 inline" />
-            Calificar
-          </button>
-        </div>
-        {rating !== null && (
-          <div className="border-t px-4 py-3">
-            <div className="flex items-center">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Star
-                  key={star}
-                  className={`h-5 w-5 ${star <= rating ? 'text-yellow-400' : 'text-gray-300'}`}
-                />
-              ))}
-              <span className="ml-2 text-sm text-gray-600">
-                Calificación promedio: {rating}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-
+      {/* Sección de calificación */}      
       {/* Historial */}
       <div className="bg-white shadow sm:rounded-lg">
         <div className="px-4 py-5 sm:px-6">
@@ -136,11 +86,14 @@ export default function ProgressHistory({
                   <div className="flex justify-between">
                     <div className="flex items-center">
                       <Calendar className="h-5 w-5 text-gray-400 mr-2" />
-                      <span className="text-sm font-medium">{entry.date}</span>
+                      <span className="text-sm font-medium">
+                        {new Date(entry.date).toLocaleDateString('es-AR')}
+                      </span>
                     </div>
                     <span
-                      className={`text-xs px-2 py-1 rounded-full ${
-                        entry.attendance ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      className={`text-xs px-2 py-1 rounded-full ${entry.attendance
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
                       }`}
                     >
                       {entry.attendance ? 'Presente' : 'Ausente'}
@@ -160,36 +113,6 @@ export default function ProgressHistory({
           )}
         </div>
       </div>
-
-      {/* Modal para calificar */}
-      {showRatingModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
-            <h3 className="text-lg font-medium mb-4">Calificar a {volunteer.nombre}</h3>
-            <div className="flex justify-center space-x-2 mb-6">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button key={star} onClick={() => setRating(star)}>
-                  <Star className={`h-8 w-8 ${star <= (rating ?? 0) ? 'text-yellow-400' : 'text-gray-300'}`} />
-                </button>
-              ))}
-            </div>
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setShowRatingModal(false)}
-                className="px-4 py-2 border rounded-md text-sm bg-white"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleRating}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm"
-              >
-                Guardar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

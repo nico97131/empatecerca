@@ -17,7 +17,7 @@ const router = express.Router();
 router.use(protect);
 
 router.route('/')
-  .get(authorize('admin'), getVolunteers)
+  .get(authorize('admin', 'tutor'), getVolunteers)
   .post(authorize('admin'), createVolunteer);
 
 router.route('/:id')

@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { User, TrendingUp, LogOut, MessageSquare, FileText } from 'lucide-react';
+import { User, TrendingUp, LogOut, MessageSquare, FileText, Star } from 'lucide-react';
 import MessagingPanel from '../components/tutor/MessagingPanel';
 import ProgressHistory from '../components/tutor/ProgressHistory';
 import MedicalRecordForm from '../components/tutor/MedicalRecordForm';
+import VolunteerRatingForm from '../components/tutor/VolunteerRatingForm';
 import axios from 'axios';
 import { API_URL } from '../config';
 import { toast } from 'react-hot-toast';
@@ -37,6 +38,7 @@ interface Student {
 
 interface Volunteer {
   id: number;
+  dni: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -103,20 +105,23 @@ export default function TutorPanel() {
   const [activeTab, setActiveTab] = useState<'overview' | 'messages'>('overview');
   const [selectedAlumno, setSelectedAlumno] = useState<Alumno | null>(null);
   const [showProgress, setShowProgress] = useState(false);
+  const [showRatingForm, setShowRatingForm] = useState(false);
+  const [showRatings, setShowRatings] = useState(false);
   const [showMedicalRecord, setShowMedicalRecord] = useState(false);
+
 
   useEffect(() => {
     const fetchData = async () => {
       const token = localStorage.getItem('token');
       try {
-        const [studentsRes, groupsRes, announcementsRes] = await Promise.all([
+        const [studentsRes, groupsRes, volunteersRes, announcementsRes] = await Promise.all([
           axios.get(`${API_URL}/api/students`, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_URL}/api/groups`, { headers: { Authorization: `Bearer ${token}` } }),
-          //axios.get(`${API_URL}/api/volunteers`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_URL}/api/volunteers`, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_URL}/api/announcements`, { headers: { Authorization: `Bearer ${token}` } }),
         ]);
 
-       // setVolunteers(volunteersRes.data.data);
+        setVolunteers(volunteersRes.data.data);
 
 
         const filtrados = announcementsRes.data.data.filter((a: any) => {
@@ -136,7 +141,6 @@ export default function TutorPanel() {
 
         setStudents(studentsRes.data.data);
         setGroups(groupsRes.data.data);
-        setVolunteers([]);
         setAnnouncements(filtrados);
       } catch (error) {
         console.error('❌ Error al obtener datos:', error);
@@ -145,12 +149,24 @@ export default function TutorPanel() {
     fetchData();
   }, []);
 
-  const getVolunteerByGroupId = (groupId?: number): Volunteer | undefined => {
-    if (!groupId) return undefined;
+  const getVolunteersByGroupId = (groupId?: number): Volunteer[] => {
+    if (!groupId) return [];
     const group = groups.find(g => g.id === groupId);
-    if (!group) return undefined;
-    return volunteers.find(v => v.groupId === groupId); // esto asume que tenés el campo `groupId` en los voluntarios
+    if (!group || !Array.isArray(group.volunteers)) return [];
+
+    return group.volunteers.map(v => {
+      const [firstName, ...rest] = v.name.split(' ');
+      return {
+        id: v.id,
+        first_name: firstName,
+        last_name: rest.join(' '),
+        email: `${v.dni}@empate.org`,
+        groupId
+      };
+    });
   };
+
+
 
 
   const buildAlumno = (student: Student): Alumno => {
@@ -158,14 +174,14 @@ export default function TutorPanel() {
       id: student.id,
       nombre: `${student.firstName} ${student.lastName}`,
       progreso: [], // se va a cargar en el componente ProgressHistory
-      voluntario: (() => {
-        const v = getVolunteerByGroupId(student.groupIds?.[0]);
-        return {
-          nombre: v ? `${v.first_name} ${v.last_name}` : 'Voluntario Asignado',
-          email: v?.email || 'voluntario@empate.org',
-          rating: v?.rating || undefined,
-        };
-      })(),
+      voluntario: getVolunteersByGroupId(student.groupIds?.[0]).map(v => ({
+        id: v.id,
+        nombre: `${v.first_name} ${v.last_name}`,
+        email: v.email,
+        rating: v.rating
+      })),
+
+
 
       fichamedica: {
         alergias: safeParseArray(student.allergies),
@@ -198,9 +214,56 @@ export default function TutorPanel() {
     console.log('Sending message:', message);
   };
 
-  const handleRateVolunteer = (studentId: number, rating: number) => {
-    console.log('Rating volunteer for student:', studentId, 'with rating:', rating);
-  };
+  const handleRateVolunteer = async (studentId: number, volunteerEmail: string, rating: number) => {
+    const token = localStorage.getItem('token');
+
+    const volunteer = volunteers.find(v => `${v.dni}@empate.org` === volunteerEmail);
+    const volunteer_id = volunteer?.id;
+    const tutor_id = user?.id;
+    const score = rating;
+
+    console.log('🎯 Intentando calificar...');
+    console.log('Voluntario:', volunteer_id, volunteer?.first_name, volunteer?.last_name);
+    console.log('Rating:', score);
+    console.log('Tutor ID:', tutor_id);
+
+    if (!volunteer_id || !tutor_id || !score) {
+      console.error('❌ Faltan datos para registrar la calificación');
+      toast.error('No se pudo registrar la calificación. Faltan datos.');
+      return;
+    }
+
+    try {
+      await axios.post(`${API_URL}/api/ratings`, {
+        volunteer_id,
+        tutor_id,
+        score,
+        feedback: '', // podés agregar más adelante
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      toast.success('✅ Calificación registrada correctamente');
+    } catch (error: any) {
+  if (error.response?.status === 409) {
+    toast(
+      '⚠️ Ya registraste una calificación para este voluntario esta semana.',
+      {
+        icon: '🔁',
+        style: {
+          background: '#FFF3CD',
+          color: '#856404',
+        }
+      }
+    );
+  } else {
+    console.error('❌ Error al guardar calificación:', error); // ✅ solo loguea si es un error real
+    toast.error('Ocurrió un error al intentar guardar la calificación.');
+  }
+}
+
+  }
+
 
   const handleUpdateMedicalRecord = async (record: any) => {
     if (!selectedAlumno) return;
@@ -271,6 +334,16 @@ export default function TutorPanel() {
     const group = groups.find(g => g.id === groupId);
     return group ? group.name : 'Sin asignación';
   };
+
+  const volunteersAsignados = selectedAlumno?.voluntario
+    ? selectedAlumno.voluntario.map(v => ({
+      id: v.id,
+      nombre: v.nombre,
+      email: v.email,
+      rating: v.rating
+    }))
+    : [];
+
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -345,6 +418,8 @@ export default function TutorPanel() {
                         onClick={() => {
                           setSelectedAlumno(alumno);
                           setShowMedicalRecord(true);
+                          setShowProgress(false);
+                          setShowRatingForm(false);
                         }}
                         className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                       >
@@ -355,25 +430,47 @@ export default function TutorPanel() {
                         onClick={() => {
                           setSelectedAlumno(alumno);
                           setShowProgress(true);
+                          setShowMedicalRecord(false);
+                          setShowRatingForm(false);
                         }}
                         className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                       >
                         <TrendingUp className="h-4 w-4 mr-2 text-gray-500" />
                         Ver Progreso
                       </button>
+                      <button
+                        onClick={() => {
+                          setSelectedAlumno(alumno);
+                          setShowRatingForm(true);
+                          setShowMedicalRecord(false);
+                          setShowProgress(false);
+                        }}
+                        className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                      >
+                        <Star className="h-4 w-4 mr-2 text-gray-500" />
+                        Calificar Voluntarios
+                      </button>
                     </div>
                   </div>
                 </div>
+
                 {selectedAlumno?.id === alumno.id && showProgress && (
-                  <div className="border-t border-gray-200">
-                    <div className="px-4 py-5 sm:px-6">
-                      <ProgressHistory
-                        studentId={alumno.id}
-                        studentName={alumno.nombre}
-                        volunteer={alumno.voluntario}
-                        onRateVolunteer={handleRateVolunteer}
-                      />
-                    </div>
+                  <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
+                    <ProgressHistory
+                      studentId={alumno.id}
+                      studentName={alumno.nombre}
+                      volunteer={alumno.voluntario}
+                      onRateVolunteer={handleRateVolunteer}
+                    />
+                  </div>
+                )}
+
+                {selectedAlumno?.id === alumno.id && showRatingForm && (
+                  <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
+                    <VolunteerRatingForm
+                      volunteers={volunteersAsignados}
+                      onCancel={() => setShowRatingForm(false)}
+                    />
                   </div>
                 )}
               </div>

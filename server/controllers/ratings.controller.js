@@ -28,7 +28,7 @@ export const getVolunteerRatingsSummary = async (req, res) => {
         JOIN tutors t ON t.id = vr.tutor_id
         GROUP BY vr.volunteer_id
       `);
-      
+
 
     console.log(`✅ Calificaciones obtenidas para ${rows.length} voluntario(s)`);
     res.json({ success: true, count: rows.length, data: rows });
@@ -70,25 +70,41 @@ export const getVolunteerFeedback = async (req, res) => {
 };
 
 /**
- * @desc    Registrar una nueva calificación
+ * @desc    Registrar una nueva calificación (solo una vez por semana)
  * @route   POST /api/ratings
  * @access  Private/Tutor
  */
 export const createVolunteerRating = async (req, res) => {
   console.log('📥 POST /api/ratings - Datos recibidos:', req.body);
 
-  const { volunteer_id, tutor_id, score, feedback, date } = req.body;
+  const { volunteer_id, tutor_id, score, feedback } = req.body;
 
-  if (!volunteer_id || !tutor_id || !score || !date) {
+  if (!volunteer_id || !tutor_id || !score) {
     console.warn('⚠️ Campos obligatorios faltantes');
     return res.status(400).json({ success: false, message: 'Faltan campos obligatorios' });
   }
 
   try {
+    // Verificar si ya existe una calificación en la misma semana
+    const [existing] = await db.query(`
+SELECT id FROM volunteer_ratings
+WHERE tutor_id = ?
+  AND volunteer_id = ?
+  AND WEEK(date, 1) = WEEK(CURDATE(), 1)
+  AND YEAR(date) = YEAR(CURDATE())
+LIMIT 1
+
+    `, [tutor_id, volunteer_id]);
+
+    if (existing.length > 0) {
+      console.warn('⚠️ Ya existe una calificación esta semana');
+      return res.status(409).json({ success: false, message: 'Ya calificaste a este voluntario esta semana' });
+    }
+
     const [result] = await db.query(`
       INSERT INTO volunteer_ratings (volunteer_id, tutor_id, score, feedback, date)
-      VALUES (?, ?, ?, ?, ?)
-    `, [volunteer_id, tutor_id, score, feedback, date]);
+      VALUES (?, ?, ?, ?, CURRENT_DATE)
+    `, [volunteer_id, tutor_id, score, feedback]);
 
     console.log('✅ Calificación registrada con ID:', result.insertId);
     res.status(201).json({ success: true, message: 'Calificación registrada', id: result.insertId });
@@ -97,3 +113,4 @@ export const createVolunteerRating = async (req, res) => {
     res.status(500).json({ success: false, message: 'Error al registrar calificación' });
   }
 };
+
