@@ -3,6 +3,8 @@ import db from '../config/db.js';
 // 🔧 Crear usuario desde tutor
 async function createUserFromTutor({ id, name, dni, email }) {
   try {
+    console.log('🛠️ [createUserFromTutor] Ejecutando con:', { id, name, dni, email });
+
     const nombreNormalizado = name
       .toLowerCase()
       .normalize('NFD')
@@ -12,7 +14,11 @@ async function createUserFromTutor({ id, name, dni, email }) {
 
     const finalEmail = email || `${nombreNormalizado}@empate.org`;
 
+    console.log('📧 Email final generado:', finalEmail);
+
     const [existingUser] = await db.query('SELECT id FROM users WHERE dni = ?', [dni]);
+    console.log('🔍 Resultado búsqueda usuario existente:', existingUser);
+
     if (existingUser.length > 0) {
       console.log('⚠️ Ya existe un usuario con este DNI. No se crea otro.');
       return;
@@ -40,6 +46,7 @@ export const createTutor = async (req, res) => {
 
     const [existingTutor] = await db.query('SELECT id FROM tutors WHERE dni = ?', [dni]);
     if (existingTutor.length > 0) {
+      console.log('⚠️ Ya existe un tutor con ese DNI');
       return res.status(400).json({
         success: false,
         message: 'Ya existe un tutor con ese DNI'
@@ -52,13 +59,18 @@ export const createTutor = async (req, res) => {
       [name, dni, email || null, phone || null, Number(wantsUser) === 1 ? 1 : 0]
     );
 
+    console.log('📦 Tutor insertado con ID:', result.insertId);
+
     if (Number(wantsUser) === 1) {
+      console.log('🔧 Se solicitó creación de usuario para este tutor');
       await createUserFromTutor({
         id: result.insertId,
         name,
         dni,
         email
       });
+    } else {
+      console.log('⛔ El tutor no pidió usuario, se omite creación');
     }
 
     res.status(201).json({
@@ -131,5 +143,36 @@ export const deleteTutor = async (req, res) => {
   } catch (error) {
     console.error('❌ [deleteTutor] Error:', error);
     res.status(500).json({ success: false, message: 'Error al eliminar el tutor' });
+  }
+};
+
+// @desc Obtener voluntarios asignados a los alumnos de un tutor
+export const getVolunteersByTutor = async (req, res) => {
+  const tutorId = req.params.id;
+
+  try {
+const [results] = await db.query(
+  `SELECT DISTINCT
+     v.id,
+     CONCAT(v.first_name, ' ', v.last_name) AS name,
+     v.email,
+     v.dni,
+     g.name AS groupName,
+     s.firstName AS studentName,
+     'voluntario' AS role
+   FROM students s
+   JOIN student_group sg ON s.id = sg.student_id
+   JOIN grupos g ON sg.group_id = g.id
+   JOIN group_volunteers gv ON g.id = gv.group_id
+   JOIN volunteers v ON gv.volunteer_id = v.id
+   WHERE s.tutorId = ?`,
+  [tutorId]
+);
+
+
+    res.json({ success: true, data: results });
+  } catch (error) {
+    console.error('❌ [getVolunteersByTutor] Error:', error);
+    res.status(500).json({ success: false, message: 'Error al obtener voluntarios' });
   }
 };

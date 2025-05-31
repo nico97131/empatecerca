@@ -1,56 +1,249 @@
-import { useState } from 'react';
-import SharedMessagingPanel from '../shared/MessagingPanel';
-import type { Message, Student } from '../../types/messaging';
+import { useState, useEffect } from 'react';
+import { Send, User, Clock } from 'lucide-react';
 
-interface MessagingPanelProps {
-  students?: Student[];
-  onSendMessage: (message: Omit<Message, 'id' | 'timestamp' | 'read'>) => void;
-  onRateVolunteer?: (studentId: number, rating: number) => void;
+interface Message {
+  id: number;
+  from_id: number;
+  from_role: 'tutor' | 'voluntario';
+  to_id: number;
+  to_role: 'tutor' | 'voluntario';
+  content: string;
+  timestamp: string;
+  is_read: boolean;
 }
 
-export default function MessagingPanel({ students = [], onSendMessage }: MessagingPanelProps) {
-  // Convert volunteers from students into contacts format
-  const contacts = students.map(student => ({
-    id: student.id,
-    name: student.voluntario.nombre,
-    email: student.voluntario.email,
-    role: 'voluntario' as const,
-    studentName: student.nombre
-  }));
+interface Contact {
+  id: number;
+  name: string;
+  email: string;
+  role: 'tutor' | 'voluntario';
+  studentName?: string;
+  groupName?: string;
+  lastMessage?: string;
+  unreadCount?: number;
+}
 
-  // Mock messages - in a real app, these would come from a backend
-  const [messages] = useState<Message[]>([
-    {
-      id: 1,
-      from: 'tutor@empate.org',
-      to: 'voluntario@empate.org',
-      content: '¿Cómo va el progreso de Ana en matemáticas?',
-      timestamp: '2024-03-10 14:30',
-      read: true
-    },
-    {
-      id: 2,
-      from: 'voluntario@empate.org',
-      to: 'tutor@empate.org',
-      content: 'Ana está mejorando mucho, especialmente en álgebra.',
-      timestamp: '2024-03-10 14:35',
-      read: true
+interface MessagingPanelProps {
+  currentUser: {
+    id: number;
+    name: string;
+    email: string;
+    role: 'tutor' | 'voluntario';
+  };
+  contacts: Contact[];
+  messages: Message[];
+  onSendMessage: (message: Omit<Message, 'id' | 'timestamp' | 'read'>) => Promise<any>;
+  selectedContact: Contact | null;
+  onSelectContact: (contact: Contact) => void;
+  loadingContacts: boolean;
+}
+
+export default function MessagingPanel({
+  currentUser,
+  contacts,
+  messages,
+  onSendMessage,
+  selectedContact,
+  onSelectContact,
+  loadingContacts
+}: MessagingPanelProps) {
+  const [newMessage, setNewMessage] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [localMessages, setLocalMessages] = useState<Message[]>(messages);
+
+  useEffect(() => {
+    setLocalMessages(messages);
+  }, [messages]);
+
+  useEffect(() => {
+    const marcarComoLeidos = async () => {
+      if (!selectedContact) return;
+
+      try {
+        await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/messages/mark-as-read`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to_id: currentUser.id,
+            to_role: currentUser.role,
+            from_id: selectedContact.id,
+            from_role: selectedContact.role
+          })
+        });
+        console.log('✅ Mensajes marcados como leídos');
+      } catch (err) {
+        console.error('❌ Error al marcar como leídos:', err);
+      }
+    };
+
+    marcarComoLeidos();
+  }, [selectedContact]);
+
+  useEffect(() => {
+    const chatArea = document.querySelector('.overflow-y-auto');
+    chatArea?.scrollTo({ top: chatArea.scrollHeight, behavior: 'smooth' });
+  }, [selectedContact, localMessages]);
+
+  const filteredContacts = searchTerm.trim()
+    ? contacts.filter((contact) =>
+        contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        contact.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (contact.studentName && contact.studentName.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
+    : contacts;
+
+  const getMessagesForChat = (
+    messages: Message[],
+    userId: number,
+    userRole: 'tutor' | 'voluntario',
+    contactId: number,
+    contactRole: 'tutor' | 'voluntario'
+  ): Message[] => {
+    return messages.filter(
+      (msg) =>
+        (msg.from_id === userId && msg.from_role === userRole && msg.to_id === contactId && msg.to_role === contactRole) ||
+        (msg.from_id === contactId && msg.from_role === contactRole && msg.to_id === userId && msg.to_role === userRole)
+    );
+  };
+
+  const currentChat = selectedContact
+    ? getMessagesForChat(localMessages, currentUser.id, currentUser.role, selectedContact.id, selectedContact.role)
+    : [];
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedContact || !newMessage.trim()) return;
+
+    const mensajeAEnviar = {
+      from_id: currentUser.id,
+      from_role: currentUser.role,
+      to_id: selectedContact.id,
+      to_role: selectedContact.role,
+      content: newMessage.trim()
+    };
+
+    try {
+      const response = await onSendMessage(mensajeAEnviar);
+      if (response?.data?.data) {
+        const newMsg = response.data.data;
+        setLocalMessages(prev => [...prev, newMsg]);
+      }
+    } catch (err) {
+      console.error('❌ Error al enviar mensaje', err);
     }
-  ]);
 
-  const currentUser = {
-    id: 1,
-    name: 'Tutor Usuario',
-    email: 'tutor@empate.org',
-    role: 'tutor' as const
+    setNewMessage('');
   };
 
   return (
-    <SharedMessagingPanel
-      currentUser={currentUser}
-      contacts={contacts}
-      messages={messages}
-      onSendMessage={onSendMessage}
-    />
+    <div className="flex h-[600px] bg-white rounded-lg shadow-lg">
+      {/* Sidebar de contactos */}
+      <div className="w-1/3 border-r border-gray-200">
+        <div className="p-4 border-b border-gray-200">
+          <input
+            type="text"
+            placeholder="Buscar contactos..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="overflow-y-auto h-[calc(600px-73px)]">
+          {loadingContacts ? (
+            <div className="p-4 text-sm text-gray-500 italic">Cargando contactos...</div>
+          ) : filteredContacts.length === 0 ? (
+            <div className="p-4 text-sm text-gray-500 italic">No hay contactos disponibles.</div>
+          ) : null}
+
+          {filteredContacts.map((contact) => (
+            <div
+              key={contact.id}
+              onClick={() => onSelectContact(contact)}
+              className={`p-4 cursor-pointer hover:bg-gray-50 ${selectedContact?.id === contact.id ? 'bg-indigo-50' : ''}`}
+            >
+              <div className="flex items-center space-x-3">
+                <User className="h-10 w-10 text-gray-400 bg-gray-100 rounded-full p-2" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{contact.name}</p>
+                  <p className="text-sm text-gray-500 truncate">
+                    {contact.role === 'tutor' ? 'Tutor' : 'Voluntario'}
+                    {contact.studentName && ` - ${contact.studentName}`}
+                    {contact.groupName && ` (${contact.groupName})`}
+                  </p>
+                  {contact.lastMessage && (
+                    <p className="text-xs text-gray-500 truncate mt-1">{contact.lastMessage}</p>
+                  )}
+                </div>
+                {contact.unreadCount && contact.unreadCount > 0 && (
+                  <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-indigo-600 text-white text-xs">
+                    {contact.unreadCount}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Chat */}
+      <div className="flex-1 flex flex-col">
+        {selectedContact ? (
+          <>
+            <div className="p-4 border-b border-gray-200 flex items-center space-x-3">
+              <User className="h-10 w-10 text-gray-400 bg-gray-100 rounded-full p-2" />
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">{selectedContact.name}</h3>
+                <p className="text-sm text-gray-500">
+                  {selectedContact.role === 'tutor' ? 'Tutor' : 'Voluntario'}
+                  {selectedContact.studentName && ` - ${selectedContact.studentName}`}
+                  {selectedContact.groupName && ` (${selectedContact.groupName})`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {currentChat.map((message) => {
+                const isOwn = message.from_id === currentUser.id && message.from_role === currentUser.role;
+                return (
+                  <div key={message.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[70%] rounded-lg px-4 py-2 ${isOwn ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
+                      <p className="text-sm">{message.content}</p>
+                      <div className={`flex items-center mt-1 text-xs ${isOwn ? 'text-indigo-200' : 'text-gray-500'}`}>
+                        <Clock className="h-3 w-3 mr-1" />
+                        {new Date(message.timestamp).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200">
+              <div className="flex space-x-4">
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Escribe un mensaje..."
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="submit"
+                  disabled={!newMessage.trim()}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none disabled:opacity-50"
+                >
+                  <Send className="h-4 w-4 mr-2" />
+                  Enviar
+                </button>
+              </div>
+            </form>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-gray-500">
+            Selecciona un contacto para comenzar a chatear
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

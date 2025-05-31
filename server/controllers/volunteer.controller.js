@@ -48,6 +48,13 @@ export const getVolunteers = async (req, res) => {
         [volunteer.id]
       );
       volunteer.availability = availabilityRows.map(r => r.slot);
+
+      // 👇 NUEVO: obtener los grupos asignados
+      const [groupRows] = await db.query(
+        'SELECT group_id FROM group_volunteers WHERE volunteer_id = ?',
+        [volunteer.id]
+      );
+      volunteer.groups = groupRows.map(g => g.group_id); // esto es lo que necesitás en el frontend
     }
 
     console.log(`✅ Se obtuvieron ${rows.length} voluntarios`);
@@ -58,6 +65,7 @@ export const getVolunteers = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 
 // @desc Get single volunteer
@@ -403,3 +411,6 @@ export const updateVolunteerStatus = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+
+

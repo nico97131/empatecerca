@@ -46,6 +46,15 @@ interface Volunteer {
   groupId?: number;
 }
 
+interface Contact {
+  id: number;
+  name: string;
+  email: string;
+  role: 'voluntario';
+  studentName?: string;
+  groupName?: string;
+}
+
 interface Alumno {
   id: number;
   nombre: string;
@@ -86,6 +95,16 @@ interface Group {
   schedule: string;
 }
 
+interface Message {
+  id: number;
+  from_id: number;
+  from_role: 'tutor' | 'voluntario';
+  to_id: number;
+  to_role: 'tutor' | 'voluntario';
+  content: string;
+  timestamp: string;
+  is_read: boolean;
+}
 const safeParseArray = (value?: string): string[] => {
   if (!value) return [];
   try {
@@ -103,26 +122,43 @@ export default function TutorPanel() {
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'messages'>('overview');
+  const [messages, setMessages] = useState<Message[]>([]);
   const [selectedAlumno, setSelectedAlumno] = useState<Alumno | null>(null);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [showProgress, setShowProgress] = useState(false);
   const [showRatingForm, setShowRatingForm] = useState(false);
   const [showRatings, setShowRatings] = useState(false);
   const [showMedicalRecord, setShowMedicalRecord] = useState(false);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+
+
+
 
 
   useEffect(() => {
     const fetchData = async () => {
       const token = localStorage.getItem('token');
+
       try {
-        const [studentsRes, groupsRes, volunteersRes, announcementsRes] = await Promise.all([
+        const [studentsRes, groupsRes, volunteersRes, announcementsRes, messagesRes] = await Promise.all([
           axios.get(`${API_URL}/api/students`, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_URL}/api/groups`, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_URL}/api/volunteers`, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_URL}/api/announcements`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_URL}/api/messages`, {
+            headers: { Authorization: `Bearer ${token}` },
+            params: {
+              user_id: user?.id,
+              user_role: user?.role
+            }
+          }),
         ]);
 
+        setStudents(studentsRes.data.data);
+        setGroups(groupsRes.data.data);
         setVolunteers(volunteersRes.data.data);
-
+        setMessages(messagesRes.data.data);
 
         const filtrados = announcementsRes.data.data.filter((a: any) => {
           let destinatarios: string[] = [];
@@ -139,15 +175,68 @@ export default function TutorPanel() {
           return destinatarios.some((r) => ['tutores', 'todos'].includes(String(r).toLowerCase().trim()));
         });
 
-        setStudents(studentsRes.data.data);
-        setGroups(groupsRes.data.data);
         setAnnouncements(filtrados);
       } catch (error) {
         console.error('❌ Error al obtener datos:', error);
       }
     };
+
     fetchData();
-  }, []);
+  }, [user?.id, user?.role]);
+
+
+  useEffect(() => {
+    if (!selectedContact && contacts.length > 0) {
+      setSelectedContact(contacts[0]);
+      console.log('✅ Primer contacto seleccionado automáticamente:', contacts[0]);
+    }
+  }, [contacts, selectedContact]);
+
+
+
+  useEffect(() => {
+    const fetchVolunteersAsignados = async () => {
+      if (!user?.id) return;
+
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_URL}/api/tutors/${user.id}/volunteers`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+
+        console.log('📦 Datos crudos del backend:', response.data.data);
+
+        const uniqueById = (arr: any[]) => {
+          const seen = new Set();
+          return arr.filter((item) => {
+            if (seen.has(item.id)) return false;
+            seen.add(item.id);
+            return true;
+          });
+        };
+
+        const mappedContacts = uniqueById(response.data.data).map((v: any) => ({
+          id: v.id,
+name: v.name || 'Nombre no disponible',
+          email: v.email,
+          role: 'voluntario',
+          studentName: '', // Podés llenarlo después si tenés relación
+          groupName: v.groupName || '',
+        }));
+
+console.log('📇 Contactos construidos (desde /api/tutors/:id/volunteers):', mappedContacts);
+
+        setContacts(mappedContacts);
+      } catch (error) {
+        console.error("❌ Error al obtener voluntarios asignados al tutor:", error);
+      }
+    };
+
+    fetchVolunteersAsignados();
+  }, [user?.id]);
+
 
   const getVolunteersByGroupId = (groupId?: number): Volunteer[] => {
     if (!groupId) return [];
@@ -166,23 +255,29 @@ export default function TutorPanel() {
     });
   };
 
-
-
-
   const buildAlumno = (student: Student): Alumno => {
+    const voluntarios = getVolunteersByGroupId(student.groupIds?.[0]);
+    const voluntario = voluntarios.length > 0 ? voluntarios[0] : undefined;
+
+
+
     return {
       id: student.id,
       nombre: `${student.firstName} ${student.lastName}`,
-      progreso: [], // se va a cargar en el componente ProgressHistory
-      voluntario: getVolunteersByGroupId(student.groupIds?.[0]).map(v => ({
-        id: v.id,
-        nombre: `${v.first_name} ${v.last_name}`,
-        email: v.email,
-        rating: v.rating
-      })),
-
-
-
+      progreso: [],
+      voluntario: voluntario
+        ? {
+          id: voluntario.id,
+          nombre: `${voluntario.first_name} ${voluntario.last_name}`,
+          email: voluntario.email,
+          rating: voluntario.rating
+        }
+        : {
+          id: 0,
+          nombre: 'Sin asignar',
+          email: '',
+          rating: undefined
+        },
       fichamedica: {
         alergias: safeParseArray(student.allergies),
         medicamentos: safeParseArray(student.medications),
@@ -198,21 +293,51 @@ export default function TutorPanel() {
       },
       discipline: student.disciplineName,
       groupId: student.groupIds?.[0],
-      groupNames: student.groupName,
+      groupNames: student.groupName
     };
   };
 
 
   const myStudents = useMemo(() => {
     return students
-      .filter(student => student.tutorDni === user?.dni)
+      .filter(student => student.tutorId === user?.id)
       .map(buildAlumno);
-  }, [students, volunteers, user?.dni]);
+  }, [students, volunteers, user?.id]);
 
 
-  const handleSendMessage = (message: any) => {
-    console.log('Sending message:', message);
+
+  const handleSendMessage = async (message: {
+    from_id: number;
+    from_role: 'tutor' | 'voluntario';
+    to_id: number;
+    to_role: 'tutor' | 'voluntario';
+    content: string;
+  }) => {
+    console.log('📤 Enviando mensaje:', message);
+
+    const token = localStorage.getItem('token');
+
+    try {
+      const response = await axios.post(
+        `${API_URL}/api/messages`,
+        message,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      console.log('✅ Mensaje guardado:', response.data);
+      toast.success('Mensaje enviado');
+      return response; // 🔁 Importante: devolver la respuesta para que MessagingPanel actualice
+    } catch (error) {
+      console.error('❌ Error al enviar mensaje:', error);
+      toast.error('No se pudo enviar el mensaje');
+    }
   };
+
+
 
   const handleRateVolunteer = async (studentId: number, volunteerEmail: string, rating: number) => {
     const token = localStorage.getItem('token');
@@ -245,22 +370,22 @@ export default function TutorPanel() {
 
       toast.success('✅ Calificación registrada correctamente');
     } catch (error: any) {
-  if (error.response?.status === 409) {
-    toast(
-      '⚠️ Ya registraste una calificación para este voluntario esta semana.',
-      {
-        icon: '🔁',
-        style: {
-          background: '#FFF3CD',
-          color: '#856404',
-        }
+      if (error.response?.status === 409) {
+        toast(
+          '⚠️ Ya registraste una calificación para este voluntario esta semana.',
+          {
+            icon: '🔁',
+            style: {
+              background: '#FFF3CD',
+              color: '#856404',
+            }
+          }
+        );
+      } else {
+        console.error('❌ Error al guardar calificación:', error); // ✅ solo loguea si es un error real
+        toast.error('Ocurrió un error al intentar guardar la calificación.');
       }
-    );
-  } else {
-    console.error('❌ Error al guardar calificación:', error); // ✅ solo loguea si es un error real
-    toast.error('Ocurrió un error al intentar guardar la calificación.');
-  }
-}
+    }
 
   }
 
@@ -335,14 +460,26 @@ export default function TutorPanel() {
     return group ? group.name : 'Sin asignación';
   };
 
-  const volunteersAsignados = selectedAlumno?.voluntario
-    ? selectedAlumno.voluntario.map(v => ({
+const volunteersAsignados = selectedAlumno?.groupId
+  ? getVolunteersByGroupId(selectedAlumno.groupId).map(v => ({
       id: v.id,
-      nombre: v.nombre,
+      nombre: `${v.first_name} ${v.last_name}`,
       email: v.email,
       rating: v.rating
     }))
-    : [];
+  : [];
+
+    
+
+useEffect(() => {
+  console.log('🧠 useEffect general de debugging');
+
+  console.log('👤 user:', user);
+  console.log('🧾 contacts en estado:', contacts);
+  console.log('📩 messages en estado:', messages);
+  console.log('📌 selectedContact:', selectedContact);
+  console.log('🟣 activeTab:', activeTab);
+}, [user, contacts, messages, selectedContact, activeTab]);
 
 
   return (
@@ -477,7 +614,20 @@ export default function TutorPanel() {
             ))}
           </div>
         ) : (
-          <MessagingPanel students={myStudents} onSendMessage={handleSendMessage} />
+          <MessagingPanel
+            currentUser={user}
+            contacts={contacts}
+            messages={messages}
+            onSendMessage={handleSendMessage}
+            selectedContact={selectedContact}
+            onSelectContact={setSelectedContact}
+          />
+
+
+
+
+
+
         )}
       </div>
 

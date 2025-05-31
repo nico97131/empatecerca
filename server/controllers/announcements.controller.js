@@ -1,12 +1,12 @@
 import db from '../config/db.js';
 
 /**
- * GET /api/messages
+ * GET /api/announcements
  */
-export const getMessages = async (req, res) => {
+export const getAnnouncements = async (req, res) => {
   try {
     const [rows] = await db.query(`
-      SELECT * FROM messages
+      SELECT * FROM announcements
       WHERE expiration_date >= CURDATE()
       ORDER BY publication_date DESC
     `);
@@ -27,22 +27,22 @@ export const getMessages = async (req, res) => {
 
     res.json({ success: true, data: parsedRows });
   } catch (error) {
-    console.error('❌ [getMessages] Error:', error);
-    res.status(500).json({ success: false, message: 'Error al obtener mensajes' });
+    console.error('❌ [getAnnouncements] Error:', error);
+    res.status(500).json({ success: false, announcement: 'Error al obtener mensajes' });
   }
 };
 
 /**
- * POST /api/messages
+ * POST /api/announcements
  */
-export const createMessage = async (req, res) => {
+export const createAnnouncement = async (req, res) => {
   const { subject, content, recipients, status, publication_date, expiration_date } = req.body;
 
-  console.log('📨 [createMessage] Datos recibidos:', req.body);
+  console.log('📨 [createAnnouncement] Datos recibidos:', req.body);
 
   if (!subject || !content || !recipients?.length || !publication_date || !expiration_date) {
-    console.warn('⚠️ [createMessage] Faltan campos obligatorios');
-    return res.status(400).json({ success: false, message: 'Faltan campos obligatorios' });
+    console.warn('⚠️ [createAnnouncement] Faltan campos obligatorios');
+    return res.status(400).json({ success: false, announcement: 'Faltan campos obligatorios' });
   }
 
   try {
@@ -50,11 +50,11 @@ export const createMessage = async (req, res) => {
     const validRecipients = ['voluntarios', 'tutores', 'todos'];
     const invalid = recipients.some(r => typeof r !== 'string' || !validRecipients.includes(r));
     if (invalid) {
-      return res.status(400).json({ success: false, message: 'Destinatarios inválidos' });
+      return res.status(400).json({ success: false, announcement: 'Destinatarios inválidos' });
     }
 
     const [result] = await db.query(
-      `INSERT INTO messages (subject, content, recipients, status, publication_date, expiration_date)
+      `INSERT INTO announcements (subject, content, recipients, status, publication_date, expiration_date)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [
         subject,
@@ -66,21 +66,21 @@ export const createMessage = async (req, res) => {
       ]
     );
 
-    console.log('✅ [createMessage] Mensaje insertado con ID:', result.insertId);
-    res.status(201).json({ success: true, message: 'Mensaje creado', id: result.insertId });
+    console.log('✅ [createAnnouncement] Mensaje insertado con ID:', result.insertId);
+    res.status(201).json({ success: true, announcement: 'Mensaje creado', id: result.insertId });
   } catch (error) {
-    console.error('❌ [createMessage] Error al guardar mensaje:', error);
-    res.status(500).json({ success: false, message: 'Error al guardar mensaje' });
+    console.error('❌ [createAnnouncement] Error al guardar mensaje:', error);
+    res.status(500).json({ success: false, announcement: 'Error al guardar mensaje' });
   }
 };
 
 /**
- * GET /api/messages/expired
+ * GET /api/announcements/expired
  */
-export const getExpiredMessages = async (req, res) => {
+export const getExpiredAnnouncements = async (req, res) => {
   try {
     const [rows] = await db.query(`
-      SELECT * FROM messages
+      SELECT * FROM announcements
       WHERE expiration_date < CURDATE()
       ORDER BY expiration_date DESC
     `);
@@ -102,25 +102,25 @@ export const getExpiredMessages = async (req, res) => {
 
     res.json({ success: true, data: parsedRows });
   } catch (error) {
-    console.error('❌ [getExpiredMessages] Error:', error);
-    res.status(500).json({ success: false, message: 'Error al obtener mensajes vencidos' });
+    console.error('❌ [getExpiredAnnouncements] Error:', error);
+    res.status(500).json({ success: false, announcement: 'Error al obtener mensajes vencidos' });
   }
 };
 
 
 /**
- * PUT /api/messages/:id
+ * PUT /api/announcements/:id
  */
-export const updateMessage = async (req, res) => {
+export const updateAnnouncement = async (req, res) => {
   const { id } = req.params;
   const { subject, content, recipients, status, publication_date, expiration_date } = req.body;
 
-  console.log('✏️ [updateMessage] ID:', id);
-  console.log('✏️ [updateMessage] Datos:', req.body);
+  console.log('✏️ [updateAnnouncement] ID:', id);
+  console.log('✏️ [updateAnnouncement] Datos:', req.body);
 
   if (!subject || !content || !recipients?.length || !publication_date || !expiration_date) {
-    console.warn('⚠️ [updateMessage] Faltan campos obligatorios para editar');
-    return res.status(400).json({ success: false, message: 'Faltan campos obligatorios para editar' });
+    console.warn('⚠️ [updateAnnouncement] Faltan campos obligatorios para editar');
+    return res.status(400).json({ success: false, announcement: 'Faltan campos obligatorios para editar' });
   }
 
   try {
@@ -128,11 +128,11 @@ export const updateMessage = async (req, res) => {
     const validRecipients = ['voluntarios', 'tutores', 'todos'];
     const invalid = recipients.some(r => typeof r !== 'string' || !validRecipients.includes(r));
     if (invalid) {
-      return res.status(400).json({ success: false, message: 'Destinatarios inválidos' });
+      return res.status(400).json({ success: false, announcement: 'Destinatarios inválidos' });
     }
 
     const [result] = await db.query(
-      `UPDATE messages
+      `UPDATE announcements
        SET subject = ?, content = ?, recipients = ?, status = ?, publication_date = ?, expiration_date = ?
        WHERE id = ?`,
       [
@@ -147,37 +147,37 @@ export const updateMessage = async (req, res) => {
     );
 
     if (result.affectedRows === 0) {
-      console.warn('⚠️ [updateMessage] Mensaje no encontrado para ID:', id);
-      return res.status(404).json({ success: false, message: 'Mensaje no encontrado' });
+      console.warn('⚠️ [updateAnnouncement] Mensaje no encontrado para ID:', id);
+      return res.status(404).json({ success: false, announcement: 'Mensaje no encontrado' });
     }
 
-    console.log('✅ [updateMessage] Mensaje actualizado');
-    res.json({ success: true, message: 'Mensaje actualizado' });
+    console.log('✅ [updateAnnouncement] Mensaje actualizado');
+    res.json({ success: true, announcement: 'Mensaje actualizado' });
   } catch (error) {
-    console.error('❌ [updateMessage] Error al actualizar mensaje:', error);
-    res.status(500).json({ success: false, message: 'Error al actualizar mensaje' });
+    console.error('❌ [updateAnnouncement] Error al actualizar mensaje:', error);
+    res.status(500).json({ success: false, announcement: 'Error al actualizar mensaje' });
   }
 };
 
 /**
- * DELETE /api/messages/:id
+ * DELETE /api/announcements/:id
  */
-export const deleteMessage = async (req, res) => {
+export const deleteAnnouncement = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const [result] = await db.query('DELETE FROM messages WHERE id = ?', [id]);
+    const [result] = await db.query('DELETE FROM announcements WHERE id = ?', [id]);
 
     if (result.affectedRows === 0) {
-      console.warn('⚠️ [deleteMessage] Mensaje no encontrado para ID:', id);
-      return res.status(404).json({ success: false, message: 'Mensaje no encontrado' });
+      console.warn('⚠️ [deleteAnnouncement] Mensaje no encontrado para ID:', id);
+      return res.status(404).json({ success: false, announcement: 'Mensaje no encontrado' });
     }
 
-    console.log(`🗑️ [deleteMessage] Mensaje ID ${id} eliminado`);
-    res.json({ success: true, message: 'Mensaje eliminado' });
+    console.log(`🗑️ [deleteAnnouncement] Mensaje ID ${id} eliminado`);
+    res.json({ success: true, announcement: 'Mensaje eliminado' });
   } catch (error) {
-    console.error('❌ [deleteMessage] Error:', error);
-    res.status(500).json({ success: false, message: 'Error al eliminar mensaje' });
+    console.error('❌ [deleteAnnouncement] Error:', error);
+    res.status(500).json({ success: false, announcement: 'Error al eliminar mensaje' });
   }
 };
 

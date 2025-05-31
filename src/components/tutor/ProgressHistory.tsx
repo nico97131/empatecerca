@@ -68,7 +68,8 @@ export default function ProgressHistory({
 
   return (
     <div className="space-y-6">
-      {/* Sección de calificación */}      
+      {/* Sección de calificación */}   
+         
       {/* Historial */}
       <div className="bg-white shadow sm:rounded-lg">
         <div className="px-4 py-5 sm:px-6">
