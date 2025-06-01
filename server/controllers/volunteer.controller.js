@@ -89,6 +89,8 @@ export const getVolunteer = async (req, res) => {
 
 // @desc Create volunteer
 // @route POST /api/volunteers
+// @desc Create volunteer
+// @route POST /api/volunteers
 export const createVolunteer = async (req, res) => {
   console.log('📥 POST /api/volunteers');
   console.log('📝 Datos recibidos:', req.body);
@@ -104,7 +106,8 @@ export const createVolunteer = async (req, res) => {
       join_date,
       status,
       inactive_reason,
-      availability
+      availability,
+      groups = [] // 👈 nuevo campo
     } = req.body;
 
     const name = `${first_name} ${last_name}`.trim();
@@ -145,12 +148,10 @@ export const createVolunteer = async (req, res) => {
     const volunteerId = result.insertId;
     console.log('✅ Voluntario creado con ID:', volunteerId);
 
-    // Crear usuario automáticamente si está activo
     if (status === 'active') {
       await createUserFromVolunteer({ first_name, last_name, dni });
     }
 
-    // Insertar disponibilidad si viene en el body
     if (availability && Array.isArray(availability)) {
       const values = availability.map(slot => [volunteerId, slot]);
       await db.query(
@@ -158,6 +159,13 @@ export const createVolunteer = async (req, res) => {
         [values]
       );
       console.log(`📆 Disponibilidad insertada para voluntario ${volunteerId}`);
+    }
+
+    // 🔥 NUEVO: insertar grupos si vienen
+    if (Array.isArray(groups) && groups.length > 0) {
+      const groupValues = groups.map(groupId => [volunteerId, groupId]);
+      await db.query('INSERT INTO group_volunteers (volunteer_id, group_id) VALUES ?', [groupValues]);
+      console.log(`📌 Grupos asignados al crear voluntario ${volunteerId}:`, groups);
     }
 
     res.status(201).json({
@@ -184,6 +192,8 @@ export const createVolunteer = async (req, res) => {
 
 // @desc Update volunteer
 // @route PUT /api/volunteers/:id
+// @desc Update volunteer
+// @route PUT /api/volunteers/:id
 export const updateVolunteer = async (req, res) => {
   console.log(`✏️ PUT /api/volunteers/${req.params.id}`);
   console.log('📝 Datos para actualizar:', req.body);
@@ -207,7 +217,8 @@ export const updateVolunteer = async (req, res) => {
       join_date,
       status,
       inactive_reason,
-      availability
+      availability,
+      groups = [] // 👈 nuevo campo
     } = req.body;
 
     const name = `${first_name} ${last_name}`.trim();
@@ -266,7 +277,6 @@ export const updateVolunteer = async (req, res) => {
     await db.query(updateQuery, values);
     console.log('✅ Voluntario actualizado correctamente');
 
-    // Crear usuario si está activo y aún no existe
     if (status === 'active') {
       const [existingUser] = await db.query('SELECT id FROM users WHERE dni = ?', [dni]);
       if (existingUser.length === 0) {
@@ -274,7 +284,6 @@ export const updateVolunteer = async (req, res) => {
       }
     }
 
-    // Actualizar disponibilidad
     if (availability && Array.isArray(availability)) {
       await db.query('DELETE FROM volunteer_availability WHERE volunteer_id = ?', [id]);
 
@@ -285,6 +294,19 @@ export const updateVolunteer = async (req, res) => {
           [values]
         );
         console.log(`📆 Disponibilidad actualizada para voluntario ${id}`);
+      }
+    }
+
+    // 🔥 NUEVO: actualizar grupos
+    if (Array.isArray(groups)) {
+      await db.query('DELETE FROM group_volunteers WHERE volunteer_id = ?', [id]);
+
+      if (groups.length > 0) {
+        const values = groups.map(groupId => [id, groupId]);
+        await db.query('INSERT INTO group_volunteers (volunteer_id, group_id) VALUES ?', [values]);
+        console.log(`🔁 Grupos actualizados para voluntario ${id}:`, groups);
+      } else {
+        console.log(`📭 Voluntario ${id} quedó sin grupos asignados`);
       }
     }
 
@@ -305,6 +327,7 @@ export const updateVolunteer = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 
 // @desc Delete volunteer
@@ -412,5 +435,34 @@ export const updateVolunteerStatus = async (req, res) => {
   }
 };
 
+// @desc Asignar grupos a un voluntario
+// @route PUT /api/volunteers/:id/groups
+export const assignGroupsToVolunteer = async (req, res) => {
+  const volunteerId = req.params.id;
+  const { groupIds } = req.body;
+
+  console.log(`🔄 Asignando grupos al voluntario ${volunteerId}:`, groupIds);
+
+  if (!Array.isArray(groupIds)) {
+    return res.status(400).json({ success: false, message: 'groupIds debe ser un array' });
+  }
+
+  try {
+    // 1. Eliminar relaciones previas
+    await db.query('DELETE FROM group_volunteers WHERE volunteer_id = ?', [volunteerId]);
+
+    // 2. Insertar nuevas relaciones si hay
+    if (groupIds.length > 0) {
+      const values = groupIds.map(groupId => [volunteerId, groupId]);
+      await db.query('INSERT INTO group_volunteers (volunteer_id, group_id) VALUES ?', [values]);
+    }
+
+    console.log('✅ Grupos asignados correctamente');
+    res.json({ success: true, message: 'Grupos asignados correctamente' });
+  } catch (error) {
+    console.error('❌ [assignGroupsToVolunteer] Error:', error);
+    res.status(500).json({ success: false, message: 'Error al asignar grupos' });
+  }
+};
 
 

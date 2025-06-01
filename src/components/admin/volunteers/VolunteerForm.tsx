@@ -110,12 +110,12 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
   };
 
 
-  const handleGroupChange = (groupName: string) => {
+  const handleGroupChange = (groupId: number) => {
     setFormData((prev) => {
-      const isSelected = prev.groups.includes(groupName);
+      const isSelected = prev.groups.includes(groupId.toString());
       const updatedGroups = isSelected
-        ? prev.groups.filter((g) => g !== groupName)
-        : [...prev.groups, groupName];
+        ? prev.groups.filter((g) => g !== groupId.toString())
+        : [...prev.groups, groupId.toString()];
 
       return {
         ...prev,
@@ -124,6 +124,7 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
       };
     });
   };
+
 
   const handleStatusChange = (status: 'active' | 'inactive') => {
     setFormData((prev) => ({
@@ -191,10 +192,10 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
                   <label key={group.id} className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={formData.groups.includes(group.name)}
-                      onChange={() => handleGroupChange(group.name)}
-                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                      checked={formData.groups.includes(group.id.toString())}
+                      onChange={() => handleGroupChange(group.id)}
                     />
+
                     <span className="ml-2 text-sm text-gray-700">
                       {group.name} - {group.schedule}
                     </span>
@@ -235,84 +236,84 @@ export default function VolunteerForm({ volunteer, onSubmit, onCancel }: Volunte
 
             </div>
           )}
-<div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">Disponibilidad</label>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Disponibilidad</label>
 
-  <div className="flex flex-wrap items-center gap-2 mb-3">
-    <select
-      value={newSlot.day}
-      onChange={(e) => setNewSlot({ ...newSlot, day: e.target.value })}
-      className="w-28 border border-gray-300 rounded-md px-2 py-1 text-sm shadow-sm"
-    >
-      {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((day) => (
-        <option key={day} value={day}>{day}</option>
-      ))}
-    </select>
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <select
+                value={newSlot.day}
+                onChange={(e) => setNewSlot({ ...newSlot, day: e.target.value })}
+                className="w-28 border border-gray-300 rounded-md px-2 py-1 text-sm shadow-sm"
+              >
+                {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((day) => (
+                  <option key={day} value={day}>{day}</option>
+                ))}
+              </select>
 
-    <input
-      type="time"
-      value={newSlot.time_from}
-      onChange={(e) => setNewSlot({ ...newSlot, time_from: e.target.value })}
-      className="w-24 border border-gray-300 rounded-md px-2 py-1 text-sm shadow-sm"
-    />
+              <input
+                type="time"
+                value={newSlot.time_from}
+                onChange={(e) => setNewSlot({ ...newSlot, time_from: e.target.value })}
+                className="w-24 border border-gray-300 rounded-md px-2 py-1 text-sm shadow-sm"
+              />
 
-    <span className="text-sm text-gray-600">a</span>
+              <span className="text-sm text-gray-600">a</span>
 
-    <input
-      type="time"
-      value={newSlot.time_to}
-      onChange={(e) => setNewSlot({ ...newSlot, time_to: e.target.value })}
-      className="w-24 border border-gray-300 rounded-md px-2 py-1 text-sm shadow-sm"
-    />
+              <input
+                type="time"
+                value={newSlot.time_to}
+                onChange={(e) => setNewSlot({ ...newSlot, time_to: e.target.value })}
+                className="w-24 border border-gray-300 rounded-md px-2 py-1 text-sm shadow-sm"
+              />
 
-    <button
-      type="button"
-      onClick={() => {
-        if (newSlot.time_from && newSlot.time_to) {
-          const formatted = `${newSlot.day} de ${newSlot.time_from} a ${newSlot.time_to}`;
-          if (!formData.availability.includes(formatted)) {
-            setFormData((prev) => ({
-              ...prev,
-              availability: [...prev.availability, formatted]
-            }));
-          }
-          setNewSlot({ day: 'Lunes', time_from: '', time_to: '' });
-        }
-      }}
-      className="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 transition"
-    >
-      Agregar
-    </button>
-  </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (newSlot.time_from && newSlot.time_to) {
+                    const formatted = `${newSlot.day} de ${newSlot.time_from} a ${newSlot.time_to}`;
+                    if (!formData.availability.includes(formatted)) {
+                      setFormData((prev) => ({
+                        ...prev,
+                        availability: [...prev.availability, formatted]
+                      }));
+                    }
+                    setNewSlot({ day: 'Lunes', time_from: '', time_to: '' });
+                  }
+                }}
+                className="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 transition"
+              >
+                Agregar
+              </button>
+            </div>
 
-  {formData.availability.length === 0 ? (
-    <p className="text-sm text-gray-500 italic">Sin horarios cargados.</p>
-  ) : (
-    <ul className="space-y-1 text-sm">
-      {formData.availability.map((slot, idx) => (
-        <li
-          key={idx}
-          className="flex justify-between items-center bg-gray-100 px-3 py-2 rounded-md shadow-sm"
-        >
-          <span className="text-gray-700">{slot}</span>
-          <button
-            type="button"
-            onClick={() =>
-              setFormData((prev) => ({
-                ...prev,
-                availability: prev.availability.filter((_, i) => i !== idx)
-              }))
-            }
-            className="text-red-500 hover:text-red-700"
-            title="Eliminar"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </li>
-      ))}
-    </ul>
-  )}
-</div>
+            {formData.availability.length === 0 ? (
+              <p className="text-sm text-gray-500 italic">Sin horarios cargados.</p>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {formData.availability.map((slot, idx) => (
+                  <li
+                    key={idx}
+                    className="flex justify-between items-center bg-gray-100 px-3 py-2 rounded-md shadow-sm"
+                  >
+                    <span className="text-gray-700">{slot}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          availability: prev.availability.filter((_, i) => i !== idx)
+                        }))
+                      }
+                      className="text-red-500 hover:text-red-700"
+                      title="Eliminar"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
 
 
