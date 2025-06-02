@@ -3,8 +3,10 @@ import {
   createTutor,
   getAllTutors,
   getVolunteersByTutor,
+  getTutorByDni, 
   updateTutor,
   deleteTutor
+  
 } from '../controllers/tutor.controller.js';
 
 const router = express.Router();
@@ -24,5 +26,6 @@ router.put('/:id', updateTutor);
 // 🗑️ Eliminar tutor
 router.delete('/:id', deleteTutor);
 
+router.get('/dni/:dni', getTutorByDni);
 
 export default router;

@@ -176,3 +176,24 @@ const [results] = await db.query(
     res.status(500).json({ success: false, message: 'Error al obtener voluntarios' });
   }
 };
+
+// @desc Obtener tutor por DNI
+// @route GET /api/tutors/dni/:dni
+export const getTutorByDni = async (req, res) => {
+  const { dni } = req.params;
+  console.log(`📥 GET /api/tutors/dni/${dni}`);
+
+  try {
+    const [rows] = await db.query('SELECT * FROM tutors WHERE dni = ?', [dni]);
+
+    if (rows.length === 0) {
+      console.warn(`⚠️ No se encontró tutor con DNI: ${dni}`);
+      return res.status(404).json({ error: 'Tutor no encontrado' });
+    }
+
+    res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    console.error('❌ [getTutorByDni] Error:', err);
+    res.status(500).json({ error: 'Error al buscar tutor por DNI' });
+  }
+};

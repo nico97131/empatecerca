@@ -11,8 +11,9 @@ interface Student {
   birthDate: string;
   tutorId: number;
   discipline?: string;
-  groupId?: number;
+  groupIds?: number[]; // ✅ ya no uses groupId único
 }
+
 
 interface Tutor {
   id: number;
@@ -88,7 +89,7 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
             birthDate: formattedDate,
             tutorId: student.tutorId,
             discipline: disciplineId,
-            groupIds: Array.isArray(student.groupId) ? student.groupId : student.groupId ? [student.groupId] : []
+            groupIds: student.groupIds || []
           });
         }
       } catch (error) {

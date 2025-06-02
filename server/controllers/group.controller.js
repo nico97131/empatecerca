@@ -12,16 +12,15 @@ export const getGroups = async (req, res) => {
     `);
 
 const [groupVolunteers] = await db.execute(`
-  SELECT gv.group_id, v.id, CONCAT(v.first_name, ' ', v.last_name) AS name, v.dni
+  SELECT gv.group_id, v.id, v.first_name, v.last_name, v.dni, v.email
   FROM group_volunteers gv
   JOIN volunteers v ON gv.volunteer_id = v.id
 `);
 
-
-    const [groupSchedules] = await db.execute(`
-      SELECT group_id, day, time_from, time_to
-      FROM group_schedule
-    `);
+ const [groupSchedules] = await db.execute(`
+    SELECT group_id, day, time_from, time_to
+    FROM group_schedule
+  `);
 
     const [studentCounts] = await db.execute(`
       SELECT group_id, COUNT(*) AS total

@@ -128,29 +128,23 @@ export default function VoluntarioPanel() {
     fetchData();
   }, []);
 
-  useEffect(() => {
-    const contactosUnicos = new Map();
-    assignedGroups.forEach(group => {
-      students
-        .filter(s => s.groupIds?.includes(group.id))
-        .forEach((s) => {
-          if (s.tutorId && s.tutorName && s.tutorEmail) {
-            const key = `${s.tutorId}`;
-            if (!contactosUnicos.has(key)) {
-              contactosUnicos.set(key, {
-                id: s.tutorId,
-                name: s.tutorName,
-                email: s.tutorEmail,
-                role: 'tutor',
-                studentName: `${s.firstName} ${s.lastName}`,
-                groupName: group.name
-              });
-            }
-          }
-        });
-    });
-    setContacts(Array.from(contactosUnicos.values()));
-  }, [students, groups]);
+ useEffect(() => {
+  const fetchContacts = async () => {
+    try {
+const res = await axios.get(`${API_URL}/api/contacts/voluntario-dni/${user.dni}`);
+console.log('📬 Contactos recibidos:', res.data.data); // <-- Agregá esto
+setContacts(res.data.data);
+
+    } catch (err) {
+      console.error('❌ Error al obtener contactos reales:', err);
+    }
+  };
+
+  if (user.role === 'voluntario') {
+    fetchContacts();
+  }
+}, [user]);
+
 
   useEffect(() => {
     const fetchMessages = async () => {

@@ -16,6 +16,7 @@ import studentRoutes from './routes/student.routes.js';
 import tutorRoutes from './routes/tutor.routes.js';
 import ratingsRoutes from './routes/ratings.routes.js'; 
 import messageRoutes from './routes/messages.routes.js';
+import contactsRoutes from './routes/contacts.routes.js';
 
 
 // Cargar variables de entorno
@@ -56,6 +57,7 @@ const startServer = async () => {
   app.use('/api/tutors', tutorRoutes);
   app.use('/api/ratings', ratingsRoutes); 
   app.use('/api/messages', messageRoutes);
+  app.use('/api/contacts', contactsRoutes);
 
   // Ruta base
   app.get('/', (req, res) => {

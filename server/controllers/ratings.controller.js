@@ -77,40 +77,70 @@ export const getVolunteerFeedback = async (req, res) => {
 export const createVolunteerRating = async (req, res) => {
   console.log('📥 POST /api/ratings - Datos recibidos:', req.body);
 
-  const { volunteer_id, tutor_id, score, feedback } = req.body;
+  // Acomodamos la destructuración para que coincida con lo que envía el frontend:
+  const { volunteer_id, tutorDni, score, feedback } = req.body;
 
-  if (!volunteer_id || !tutor_id || !score) {
+  // 1) Validar que vengan los datos mínimos
+  if (!volunteer_id || !tutorDni || !score) {
     console.warn('⚠️ Campos obligatorios faltantes');
     return res.status(400).json({ success: false, message: 'Faltan campos obligatorios' });
   }
 
   try {
-    // Verificar si ya existe una calificación en la misma semana
-    const [existing] = await db.query(`
-SELECT id FROM volunteer_ratings
-WHERE tutor_id = ?
-  AND volunteer_id = ?
-  AND WEEK(date, 1) = WEEK(CURDATE(), 1)
-  AND YEAR(date) = YEAR(CURDATE())
-LIMIT 1
+    // 2) Buscar el ID del tutor en base a su DNI (usamos la variable tutorDni)
+    const [tutorRows] = await db.query(
+      `SELECT id 
+       FROM tutors 
+       WHERE dni = ? 
+       LIMIT 1`,
+      [tutorDni]
+    );
 
-    `, [tutor_id, volunteer_id]);
+    if (tutorRows.length === 0) {
+      console.warn(`⚠️ No se encontró ningún tutor con DNI ${tutorDni}`);
+      return res.status(404).json({ success: false, message: 'Tutor no encontrado' });
+    }
+
+    const tutor_id = tutorRows[0].id;
+    console.log(`🪪 [createVolunteerRating] tutor_id resuelto por DNI (${tutorDni}) → ${tutor_id}`);
+
+    // 3) Comprobar si ya hay calificación esta semana por ese tutor y voluntario
+    const [existing] = await db.query(
+      `SELECT id 
+       FROM volunteer_ratings
+       WHERE tutor_id = ?
+         AND volunteer_id = ?
+         AND WEEK(date, 1) = WEEK(CURDATE(), 1)
+         AND YEAR(date) = YEAR(CURDATE())
+       LIMIT 1`,
+      [tutor_id, volunteer_id]
+    );
 
     if (existing.length > 0) {
       console.warn('⚠️ Ya existe una calificación esta semana');
       return res.status(409).json({ success: false, message: 'Ya calificaste a este voluntario esta semana' });
     }
 
-    const [result] = await db.query(`
-      INSERT INTO volunteer_ratings (volunteer_id, tutor_id, score, feedback, date)
-      VALUES (?, ?, ?, ?, CURRENT_DATE)
-    `, [volunteer_id, tutor_id, score, feedback]);
+    // 4) Insertar la nueva calificación usando el ID de tutor correcto
+    const [result] = await db.query(
+      `INSERT INTO volunteer_ratings
+         (volunteer_id, tutor_id, score, feedback, date)
+       VALUES (?, ?, ?, ?, CURRENT_DATE)`,
+      [volunteer_id, tutor_id, score, feedback]
+    );
 
     console.log('✅ Calificación registrada con ID:', result.insertId);
-    res.status(201).json({ success: true, message: 'Calificación registrada', id: result.insertId });
+    return res.status(201).json({ success: true, message: 'Calificación registrada', id: result.insertId });
+
   } catch (error) {
-    console.error('❌ [createVolunteerRating] Error:', error);
-    res.status(500).json({ success: false, message: 'Error al registrar calificación' });
+    console.error('❌ [createVolunteerRating] Error completo:', error);
+    console.error('❌ [createVolunteerRating] Mensaje MySQL:', error.sqlMessage || error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Error al registrar calificación',
+      detalle: error.sqlMessage || error.message
+    });
   }
 };
+
 
