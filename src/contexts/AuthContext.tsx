@@ -22,7 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const rawRole = user.role?.toLowerCase().trim();
     const validRole = allowedRoles.includes(rawRole)
       ? (rawRole as User['role'])
-      : 'voluntario'; // Default o lanzar error si querés
+      : 'voluntario';
 
     return {
       ...user,
@@ -43,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const [isLoading, setIsLoading] = useState(true);
 
+  // 1) Este efecto restaura el user si hay token + user en storage
   useEffect(() => {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const savedUser = localStorage.getItem('user') || sessionStorage.getItem('user');
@@ -60,6 +61,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   }, []);
 
+  // 2) Este efecto se ejecuta siempre que cambie `user`, para loggear id/dni/role
+  useEffect(() => {
+    if (user) {
+      console.log(
+        '[AuthContext] ▶ user.id actual:',
+        user.id,
+        '— user.dni:',
+        user.dni,
+        '— user.role:',
+        user.role
+      );
+    }
+  }, [user]);
+
   const login = async (
     credentials: { email: string; password: string },
     rememberMe = false
@@ -76,7 +91,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       storage.setItem('token', token);
       storage.setItem('user', JSON.stringify(normalizedUser));
 
-      console.log(`[AuthContext] 💾 Datos guardados en ${rememberMe ? 'localStorage' : 'sessionStorage'}`);
+      console.log(
+        `[AuthContext] 💾 Datos guardados en ${
+          rememberMe ? 'localStorage' : 'sessionStorage'
+        }`
+      );
       setUser(normalizedUser);
       return normalizedUser;
     } catch (error) {

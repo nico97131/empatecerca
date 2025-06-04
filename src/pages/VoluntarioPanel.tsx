@@ -5,7 +5,6 @@ import PrivateMessagesPanel from '../components/voluntario/PrivateMessagesPanel'
 import StudentRating from '../components/voluntario/StudentRating';
 import MedicalRecord from '../components/voluntario/MedicalRecord';
 import ProgressForm from '../components/voluntario/ProgressForm';
-import MessagingPanel from '../components/tutor/MessagingPanel';
 import axios from 'axios';
 import { API_URL } from '../config';
 
@@ -84,6 +83,7 @@ const safeParseArray = (value: any): string[] => {
 
 export default function VoluntarioPanel() {
   const { user, logout } = useAuth();
+
   const [activeTab, setActiveTab] = useState<'overview' | 'messages'>('overview');
   const [selectedAlumno, setSelectedAlumno] = useState<Alumno | null>(null);
   const [showMedicalRecord, setShowMedicalRecord] = useState(false);
@@ -96,6 +96,12 @@ export default function VoluntarioPanel() {
   const [selectedContact, setSelectedContact] = useState<any>(null);
 
   useEffect(() => {
+  console.log('🟢 VoluntarioPanel: selectedContact cambió =>', selectedContact);
+}, [selectedContact]);
+
+
+  // 1. Cargo grupos, alumnos y anuncios al montar el componente
+  useEffect(() => {
     const fetchData = async () => {
       const token = localStorage.getItem('token');
       try {
@@ -105,6 +111,11 @@ export default function VoluntarioPanel() {
           axios.get(`${API_URL}/api/announcements`, { headers: { Authorization: `Bearer ${token}` } })
         ]);
 
+        console.log('✅ Grupos recibidos:', groupsRes.data.data);
+        console.log('✅ Alumnos recibidos:', studentsRes.data.data);
+        console.log('✅ Anuncios recibidos (raw):', announcementsRes.data.data);
+
+        // Filtrar anuncios para “voluntarios” o “todos”
         const filtrados = announcementsRes.data.data.filter((a: any) => {
           let destinatarios: string[] = [];
           if (Array.isArray(a.recipients)) {
@@ -115,28 +126,57 @@ export default function VoluntarioPanel() {
               if (Array.isArray(parsed)) destinatarios = parsed;
             } catch {}
           }
-          return destinatarios.some((r) => ['voluntarios', 'todos'].includes(String(r).toLowerCase().trim()));
+          return destinatarios.some((r) =>
+            ['voluntarios', 'todos'].includes(String(r).toLowerCase().trim())
+          );
         });
+
+        console.log('✅ Anuncios filtrados para voluntarios:', filtrados);
 
         setGroups(groupsRes.data.data);
         setStudents(studentsRes.data.data);
         setAnnouncements(filtrados);
       } catch (err) {
-        console.error('❌ Error al obtener datos:', err);
+        console.error('❌ Error al obtener datos en VoluntarioPanel:', err);
       }
     };
     fetchData();
   }, []);
 
- useEffect(() => {
+  // 2. Cargo contactos (tutores) cuando tengo el usuario
+  // 2. Cargo contactos (tutores) cuando tengo el usuario
+// 2. Cargo contactos (tutores) cuando tengo el usuario
+useEffect(() => {
   const fetchContacts = async () => {
     try {
-const res = await axios.get(`${API_URL}/api/contacts/voluntario-dni/${user.dni}`);
-console.log('📬 Contactos recibidos:', res.data.data); // <-- Agregá esto
-setContacts(res.data.data);
+      const res = await axios.get(
+        `${API_URL}/api/contacts/voluntario-dni/${user.dni}`
+      );
+res.data.data.forEach((tutor: any) => {
+  console.log('RAW tutor completo:', JSON.stringify(tutor));
+});
 
+      // Mapeo para asegurar que cada “contact” tenga su “dni”:
+      // — Si el backend ya devuelve “dni” en cada tutor, usalo directamente (tutor.dni).
+      // — Si viene con otro nombre (por ej. tutorDni), adaptá la línea a tutor.tutorDni.
+const contactosConDni = res.data.data.map((tutor: any) => ({
+  id:          tutor.userId,     // ← aquí uso userId (el ID de users2) para que coincida con messages.from_id/to_id
+  dni:         tutor.tutorDni,
+  name:        tutor.name,
+  email:       tutor.email,
+  role:        'tutor' as const,
+  studentName: tutor.studentName,
+  groupName:   tutor.groupName
+}));
+
+
+      console.log('📬 Contactos mapeados (con dni):', contactosConDni);
+      setContacts(contactosConDni);
     } catch (err) {
-      console.error('❌ Error al obtener contactos reales:', err);
+      console.error(
+        '❌ Error al obtener contactos reales en VoluntarioPanel:',
+        err
+      );
     }
   };
 
@@ -146,43 +186,94 @@ setContacts(res.data.data);
 }, [user]);
 
 
+
+  // 3. Cargo mensajes cuando cambio a la pestaña “messages” — ahora filtrando por DNI
   useEffect(() => {
     const fetchMessages = async () => {
       const token = localStorage.getItem('token');
       try {
-const res = await axios.get(`${API_URL}/api/messages`, {
-  params: {
-    user_id: user?.id,
-    user_role: user?.role
-  },
-  headers: {
-    Authorization: `Bearer ${token}`
-  }
-});
-        setMessages(res.data.data);
+        const res = await axios.get(`${API_URL}/api/messages`, {
+          params: {
+            user_dni: user?.dni,     // Cambio a user_dni
+            user_role: user?.role
+          },
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        console.log('📬 RAW response de /api/messages (por DNI):', res.data);
+
+        // Normalizo la respuesta para incluir from_dni y to_dni
+        const incoming = Array.isArray(res.data.data) ? res.data.data : [];
+        const normalized = incoming.map((msg: any) => ({
+          id:        msg.id,
+          from_id:   Number(msg.from_id),
+          from_dni:  msg.from_dni,
+          from_role: msg.from_role,
+          to_id:     Number(msg.to_id),
+          to_dni:    msg.to_dni,
+          to_role:   msg.to_role,
+          content:   msg.content,
+          timestamp: msg.timestamp,
+          is_read:   Boolean(msg.is_read)
+        }));
+
+        console.log('✅ Mensajes normalizados (con DNIs):', normalized);
+        setMessages(normalized);
       } catch (err) {
-        console.error('❌ Error al obtener mensajes:', err);
+        console.error('❌ Error al obtener mensajes (por DNI) en VoluntarioPanel:', err);
       }
     };
-    if (activeTab === 'messages') fetchMessages();
-  }, [activeTab]);
 
-  const handleSendMessage = async (message: any) => {
-    const token = localStorage.getItem('token');
-    try {
-      const res = await axios.post(`${API_URL}/api/messages`, message, { headers: { Authorization: `Bearer ${token}` } });
-      setMessages((prev: any[]) => [...prev, res.data.data]);
-    } catch (err) {
-      console.error('❌ Error al enviar mensaje:', err);
+    if (activeTab === 'messages') {
+      console.log('➡️ Cambio a pestaña Mensajes, llamo a fetchMessages() (por DNI)');
+      fetchMessages();
     }
+  }, [activeTab, user]);
+
+  // 4. Función para enviar un nuevo mensaje (agregar también DNI aquí)
+ const handleSendMessage = async (message: any) => {
+  const token = localStorage.getItem('token');
+
+  const adaptedMessage = {
+    from_dni:  user.dni,
+    from_role: user.role,
+    to_dni:    message.to_dni,
+    to_role:   message.to_role,
+    content:   message.content
   };
 
-  const volunteerDni = user?.dni?.trim();
-  const assignedGroups = groups.filter(group =>
-    Array.isArray(group.volunteers) &&
-    group.volunteers.some(v => v.dni?.trim() === volunteerDni)
-  );
+  // ───> LOG A: payload exacto a enviar
+  console.log('➡️ Payload a enviar a /api/messages:', adaptedMessage);
 
+  try {
+    const res = await axios.post(
+      `${API_URL}/api/messages`,
+      adaptedMessage,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    console.log('✅ Mensaje enviado, respuesta del servidor:', res.data.data);
+    setMessages((prev: any[]) => [...prev, res.data.data]);
+  } catch (err: any) {
+    // ───> LOG B: cuerpo del error 400
+    if (err.response) {
+      console.error('❌ Error 400 del servidor – body:', err.response.data);
+    } else {
+      console.error('❌ Error desconocido al enviar mensaje:', err);
+    }
+  }
+};
+
+
+
+  // 5. Lógica para filtrar grupos asignados al voluntario actual
+  const volunteerDni = user?.dni?.trim();
+  const assignedGroups = groups.filter(
+    (group) =>
+      Array.isArray(group.volunteers) &&
+      group.volunteers.some((v) => v.dni?.trim() === volunteerDni)
+  );
+  console.log('🔍 Grupos asignados al voluntario:', assignedGroups);
+
+  // Utilidad para calcular edad
   const calcularEdad = (birthDateStr: string): number => {
     const birthDate = new Date(birthDateStr);
     if (isNaN(birthDate.getTime())) return 0;
@@ -193,6 +284,7 @@ const res = await axios.get(`${API_URL}/api/messages`, {
     return edad;
   };
 
+  // Mapeo de Student a Alumno
   const mapStudentToAlumno = (s: Student, group: Grupo): Alumno => ({
     id: s.id,
     nombre: `${s.firstName} ${s.lastName}`,
@@ -207,28 +299,38 @@ const res = await axios.get(`${API_URL}/api/messages`, {
       contactoEmergencia: {
         nombre: s.emergencyContactName || '',
         telefono: s.emergencyContactPhone || '',
-        relacion: s.emergencyContactRelation || '',
-      },
+        relacion: s.emergencyContactRelation || ''
+      }
     },
     tutor: {
       nombre: s.tutorName || '',
-      email: s.tutorEmail || '',
+      email: s.tutorEmail || ''
     },
     grupo: group.name,
     discipline: group.discipline,
     groupId: group.id
   });
 
-  const groupStudents = assignedGroups.map(group => {
+  // Construyo groupStudents para la vista “overview”
+  const groupStudents = assignedGroups.map((group) => {
     const alumnos: Alumno[] = students
-      .filter(s => s.groupIds?.includes(group.id))
-      .map(s => mapStudentToAlumno(s, group));
+      .filter((s) => s.groupIds?.includes(group.id))
+      .map((s) => mapStudentToAlumno(s, group));
     return {
       id: group.id,
       nombre: group.name,
       materia: group.discipline,
-      alumnos,
+      alumnos
     };
+  });
+  console.log('🔍 Álumnos mapeados por grupo:', groupStudents);
+
+  // 6. Antes de renderizar, imprimo los props que llegarán a PrivateMessagesPanel
+  console.log('🚧 Props antes de renderizar PrivateMessagesPanel:', {
+    currentUser: user,
+    contacts,
+    messages,
+    selectedContact
   });
 
   return (
@@ -259,16 +361,32 @@ const res = await axios.get(`${API_URL}/api/messages`, {
             <nav className="-mb-px flex space-x-8">
               <button
                 onClick={() => setActiveTab('overview')}
-                className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${activeTab === 'overview' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${
+                  activeTab === 'overview'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
               >
-                <Users className={`-ml-0.5 mr-2 h-5 w-5 ${activeTab === 'overview' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'}`} />
+                <Users
+                  className={`-ml-0.5 mr-2 h-5 w-5 ${
+                    activeTab === 'overview' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'
+                  }`}
+                />
                 Grupos y Alumnos
               </button>
               <button
                 onClick={() => setActiveTab('messages')}
-                className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${activeTab === 'messages' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                className={`group inline-flex items-center px-1 py-4 border-b-2 font-medium text-sm ${
+                  activeTab === 'messages'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
               >
-                <MessageSquare className={`-ml-0.5 mr-2 h-5 w-5 ${activeTab === 'messages' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'}`} />
+                <MessageSquare
+                  className={`-ml-0.5 mr-2 h-5 w-5 ${
+                    activeTab === 'messages' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'
+                  }`}
+                />
                 Mensajes
               </button>
             </nav>
@@ -351,8 +469,6 @@ const res = await axios.get(`${API_URL}/api/messages`, {
               selectedContact={selectedContact}
               onSelectContact={setSelectedContact}
             />
-
-
           )}
         </div>
 
@@ -377,16 +493,23 @@ const res = await axios.get(`${API_URL}/api/messages`, {
             onSubmit={async (progressData) => {
               try {
                 const token = localStorage.getItem('token');
-                const response = await axios.post(`${API_URL}/api/progress`, {
-                  studentId: selectedAlumno.id,
-                  groupId: selectedAlumno.groupId,
-                  ...progressData
-                }, {
-                  headers: { Authorization: `Bearer ${token}` }
-                });
+                const response = await axios.post(
+                  `${API_URL}/api/progress`,
+                  {
+                    studentId: selectedAlumno.id,
+                    groupId: selectedAlumno.groupId,
+                    ...progressData
+                  },
+                  {
+                    headers: { Authorization: `Bearer ${token}` }
+                  }
+                );
                 console.log('✅ Progreso guardado con éxito:', response.data);
               } catch (err: any) {
-                console.error('❌ Error al guardar el progreso:', err.response?.data || err.message);
+                console.error(
+                  '❌ Error al guardar el progreso:',
+                  err.response?.data || err.message
+                );
                 throw new Error(err.response?.data?.message || 'No se pudo guardar el progreso');
               }
             }}

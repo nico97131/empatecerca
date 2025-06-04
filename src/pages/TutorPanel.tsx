@@ -2,7 +2,14 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { User, TrendingUp, LogOut, MessageSquare, FileText, Star } from 'lucide-react';
+import {
+  User,
+  TrendingUp,
+  LogOut,
+  MessageSquare,
+  FileText,
+  Star
+} from 'lucide-react';
 import MessagingPanel from '../components/tutor/MessagingPanel';
 import ProgressHistory from '../components/tutor/ProgressHistory';
 import MedicalRecordForm from '../components/tutor/MedicalRecordForm';
@@ -50,6 +57,7 @@ interface Contact {
   id: number;               // id del voluntario
   name: string;             // “María Fernández”, etc.
   email: string;
+  dni: string;              // DNI del voluntario
   role: 'voluntario';
   studentName?: string;     // “Nicolas” (nombre del estudiante)
   groupName?: string;       // “Fútbol Infantil”, por ejemplo
@@ -107,8 +115,10 @@ interface Announcement {
 interface Message {
   id: number;
   from_id: number;
+  from_dni: string;
   from_role: 'tutor' | 'voluntario';
   to_id: number;
+  to_dni: string;
   to_role: 'tutor' | 'voluntario';
   content: string;
   timestamp: string;
@@ -141,7 +151,7 @@ export default function TutorPanel() {
   const [showMedicalRecord, setShowMedicalRecord] = useState(false);
   const [tutorIdReal, setTutorIdReal] = useState<number | null>(null);
 
-  // 1) Obtener el ID real del tutor a partir del DNI del usuario
+  // ─── 1) Obtener el ID real del tutor a partir del DNI del usuario ─────────────────────────────────────────────
   useEffect(() => {
     const fetchTutorId = async () => {
       if (!user?.dni) return;
@@ -160,11 +170,11 @@ export default function TutorPanel() {
     fetchTutorId();
   }, [user?.dni]);
 
-  // 2) Fetch inicial de datos “base”
+  // ─── 2) Fetch inicial de datos “base” ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchData = async () => {
-      if (!user) return;
-      console.log('🔄 [TutorPanel] Iniciando fetchData...');
+      if (!user || tutorIdReal === null) return;
+      console.log('🔄 [TutorPanel] Iniciando fetchData base...');
       const token = localStorage.getItem('token');
       try {
         const [
@@ -190,25 +200,21 @@ export default function TutorPanel() {
             `${API_URL}/api/announcements`,
             { headers: { Authorization: `Bearer ${token}` } }
           ),
-          axios.get<{ success: boolean; data: Message[] }>(
+          axios.get<{ success: boolean; data: any[] }>(
             `${API_URL}/api/messages`,
             {
               headers: { Authorization: `Bearer ${token}` },
-              params: { user_id: user.id, user_role: user.role }
+              params: {
+                user_dni: user.dni,
+                user_role: user.role
+              }
             }
           )
         ]);
 
-        console.log('🧑‍🎓 [TutorPanel] studentsRes.data.data =', studentsRes.data.data);
-        console.log('📦 [TutorPanel] groupsRes.data.data =', groupsRes.data.data);
-        console.log('📦 [TutorPanel] volunteersRes.data.data =', volunteersRes.data.data);
-        console.log('📦 [TutorPanel] announcementsRes.data.data (raw) =', announcementsRes.data.data);
-        console.log('📩 [TutorPanel] messagesRes.data.data =', messagesRes.data.data);
-
         setStudents(studentsRes.data.data);
         setGroups(groupsRes.data.data);
         setVolunteers(volunteersRes.data.data);
-        setMessages(messagesRes.data.data);
 
         // Filtrar “announcements” para solo “tutores” o “todos”
         const filtrados = announcementsRes.data.data.filter((a) => {
@@ -230,17 +236,34 @@ export default function TutorPanel() {
             .map((r) => String(r).toLowerCase().trim())
             .some((r) => r === 'tutores' || r === 'todos');
         });
-        console.log('🔔 [TutorPanel] announcements (filtrados) =', filtrados);
         setAnnouncements(filtrados);
+
+        // Normalizar mensajes (solo con IDs)
+        const incoming = Array.isArray(messagesRes.data.data)
+          ? messagesRes.data.data
+          : [];
+        const normalized: Message[] = incoming.map((msg: any) => ({
+          id:         msg.id,
+          from_id:    Number(msg.from_id),
+          from_dni:   msg.from_dni,
+          from_role:  msg.from_role,
+          to_id:      Number(msg.to_id),
+          to_dni:     msg.to_dni,
+          to_role:    msg.to_role,
+          content:    msg.content,
+          timestamp:  msg.timestamp,
+          is_read:    Boolean(msg.is_read)
+        }));
+        setMessages(normalized);
       } catch (error) {
         console.error('❌ [TutorPanel] Error al obtener datos:', error);
       }
     };
 
     fetchData();
-  }, [user]);
+  }, [user, tutorIdReal]);
 
-  // 3) Una vez que ya tenemos `tutorIdReal`, traemos los contactos (voluntarios) de ese tutor
+  // ─── 3) Una vez que ya tenemos `tutorIdReal`, traemos los contactos (voluntarios) de ese tutor ──────────────
   useEffect(() => {
     if (tutorIdReal === null) {
       console.warn('⛔ [TutorPanel] tutorIdReal no definido, no se buscarán contactos');
@@ -254,7 +277,6 @@ export default function TutorPanel() {
           `${API_URL}/api/contacts/tutor/${tutorIdReal}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        console.log('📦 [TutorPanel] Datos crudos del backend (contacts):', response.data.data);
 
         if (!Array.isArray(response.data.data) || response.data.data.length === 0) {
           console.warn('⚠️ [TutorPanel] No se encontraron contactos asignados al tutor.');
@@ -262,7 +284,7 @@ export default function TutorPanel() {
           return;
         }
 
-        // Mapeamos cada “contacto” a nuestra interfaz local
+        // Mapeamos cada “contacto” a nuestra interfaz local, incluyendo DNI
         const uniqueById = (arr: any[]) => {
           const seen = new Set<number>();
           return arr.filter((item) => {
@@ -275,20 +297,22 @@ export default function TutorPanel() {
           id: v.id,
           name: v.name || 'Nombre no disponible',
           email: v.email,
+          dni: v.dni,
           role: 'voluntario' as const,
           studentName: v.studentName || '',
           groupName: v.groupName || ''
         }));
-        console.log('📇 [TutorPanel] Contactos construidos:', mappedContacts);
         setContacts(mappedContacts);
 
         // Auto-seleccionamos el primero si no hay ninguno seleccionado
         if (!selectedContact && mappedContacts.length > 0) {
-          console.log('✅ [TutorPanel] Primer contacto seleccionado automáticamente:', mappedContacts[0]);
           setSelectedContact(mappedContacts[0]);
         }
       } catch (error) {
-        console.error('❌ [TutorPanel] Error al obtener contactos asignados al tutor:', error);
+        console.error(
+          '❌ [TutorPanel] Error al obtener contactos asignados al tutor:',
+          error
+        );
         setContacts([]);
       }
     };
@@ -300,14 +324,12 @@ export default function TutorPanel() {
   // Si no hay “selectedContact” pero ya tenemos “contacts”, lo inicializamos
   useEffect(() => {
     if (!selectedContact && contacts.length > 0) {
-      console.log('✅ [TutorPanel] Primer contacto seleccionado automáticamente (2):', contacts[0]);
       setSelectedContact(contacts[0]);
     }
   }, [contacts, selectedContact]);
 
-  // 4) Construimos un array de “Alumnos” (`Alumno[]`) a partir de `students`
+  // ─── 4) Construimos un array de “Alumnos” (`Alumno[]`) a partir de `students` ────────────────────────────────
   const buildAlumno = (student: Student): Alumno => {
-    // Voluntario “por defecto” (si no encontramos ninguno)
     const voluntarioDefault = {
       id: 0,
       nombre: 'Sin asignar',
@@ -318,7 +340,7 @@ export default function TutorPanel() {
     return {
       id: student.id,
       nombre: `${student.firstName} ${student.lastName}`,
-      progreso: [], // inicialmente vacío; ProgressHistory lo llenará
+      progreso: [],
       voluntario: voluntarioDefault,
       fichamedica: {
         alergias: safeParseArray(student.allergies),
@@ -341,28 +363,26 @@ export default function TutorPanel() {
 
   const myStudents = useMemo<Alumno[]>(() => {
     if (!tutorIdReal) return [];
-    console.log('🔍 [TutorPanel] Filtrando alumnos con tutorIdReal:', tutorIdReal);
     const filtrados = students.filter((st) => Number(st.tutorId) === tutorIdReal);
-    console.log('🎓 [TutorPanel] Alumnos filtrados:', filtrados);
     return filtrados.map(buildAlumno);
   }, [students, tutorIdReal]);
 
-  // 5) Helper para obtener voluntarios de un alumno
+  // ─── 5) Helper para obtener voluntarios de un alumno ────────────────────────────────────────────────────────────
   const getVolunteersForAlumno = (alumno: Alumno): Contact[] => {
     if (!alumno) return [];
-    const nombrePrimer = alumno.nombre.split(' ')[0]; // “Nicolas” de “Nicolas Jofre”
+    const nombrePrimer = alumno.nombre.split(' ')[0];
     const encontrados = contacts.filter((c) => c.studentName === nombrePrimer);
-    console.log(`🔍 [TutorPanel] getVolunteersForAlumno('${alumno.nombre}') →`, encontrados);
     return encontrados;
   };
 
-  // Cuando cambie “selectedAlumno”, volvemos a descubrir los voluntarios para él:
-  const volunteersAsignados = selectedAlumno ? getVolunteersForAlumno(selectedAlumno) : [];
+  const volunteersAsignados = selectedAlumno
+    ? getVolunteersForAlumno(selectedAlumno)
+    : [];
 
-  // 6) Marcamos mensajes como leídos
+  // ─── 6) Marcamos mensajes como leídos ──────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     const marcarComoLeidos = async () => {
-      if (!selectedContact) return;
+      if (!selectedContact || !user) return;
       try {
         await fetch(
           `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/messages/mark-as-read`,
@@ -370,14 +390,13 @@ export default function TutorPanel() {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              to_id: user!.id,
-              to_role: user!.role,
+              to_id: user.id,
+              to_role: user.role,
               from_id: selectedContact.id,
               from_role: selectedContact.role
             })
           }
         );
-        console.log('✅ [MessagingPanel] Mensajes marcados como leídos');
       } catch (err) {
         console.error('❌ [MessagingPanel] Error al marcar como leídos:', err);
       }
@@ -385,7 +404,7 @@ export default function TutorPanel() {
     marcarComoLeidos();
   }, [selectedContact, user]);
 
-  // 7) Efecto de debugging general
+  // ─── 7) Efecto de debugging general ───────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     console.log('🧠 [TutorPanel] useEffect general de debugging');
     console.log('👤 [TutorPanel] user:', user);
@@ -394,59 +413,95 @@ export default function TutorPanel() {
     console.log('📌 [TutorPanel] selectedContact:', selectedContact);
     console.log('🟣 [TutorPanel] activeTab:', activeTab);
     console.log('🎯 [TutorPanel] tutorIdReal:', tutorIdReal);
-    console.log('▶ [TutorPanel] myStudents (para renderizar):', myStudents);
-    console.log('▶ [TutorPanel] announcements (para renderizar):', announcements);
+    console.log('▶ [TutorPanel] myStudents:', myStudents);
+    console.log('▶ [TutorPanel] announcements:', announcements);
   }, [user, contacts, messages, selectedContact, activeTab, tutorIdReal, myStudents, announcements]);
 
-  // 8) Envío de nuevo mensaje
-  const handleSendMessage = async (message: {
-    from_id: number;
-    from_role: 'tutor' | 'voluntario';
-    to_id: number;
-    to_role: 'tutor' | 'voluntario';
-    content: string;
-  }) => {
-    console.log('📤 [TutorPanel] Enviando mensaje:', message);
-    const token = localStorage.getItem('token');
-    try {
-      const response = await axios.post(`${API_URL}/api/messages`, message, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      console.log('✅ [TutorPanel] Mensaje guardado:', response.data);
-      toast.success('Mensaje enviado');
-      return response;
-    } catch (error) {
-      console.error('❌ [TutorPanel] Error al enviar mensaje:', error);
-      toast.error('No se pudo enviar el mensaje');
-    }
-  };
+  // ─── 8) Envío de nuevo mensaje ────────────────────────────────────────────────────────────────────────────────
+// ─── TutorPanel.tsx ───
+// Reemplaza tu handleSendMessage por este:
 
-  // 9) Calificar voluntario (esto lo pasamos a VolunteerRatingForm vía prop)
+const handleSendMessage = async (message: {
+  from_id: number;
+  from_dni: string;
+  from_role: 'tutor' | 'voluntario';
+  to_id: number;
+  to_dni: string;
+  to_role: 'tutor' | 'voluntario';
+  content: string;
+}) => {
+  console.log('📤 [TutorPanel] Enviando mensaje:', message);
+  const token = localStorage.getItem('token');
+
+  try {
+    // 1) Insertar el mensaje
+    await axios.post(`${API_URL}/api/messages`, message, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    toast.success('✅ Mensaje enviado');
+
+    // 2) GET con parámetro “cache buster”
+    const messagesRes = await axios.get<{ success: boolean; data: any[] }>(
+      `${API_URL}/api/messages`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        params: {
+          user_dni: user?.dni,
+          user_role: user?.role,
+          _: Date.now()
+        }
+      }
+    );
+
+    // **Aquí** imprimimos **exactamente** lo que devuelve la API:
+    console.log('🛰️ [TutorPanel] Respuesta GET /api/messages ➤', messagesRes.data);
+
+    const incoming = Array.isArray(messagesRes.data.data)
+      ? messagesRes.data.data
+      : [];
+
+    console.log('📨 [TutorPanel] incoming.msgs:', incoming);
+
+    const normalized: Message[] = incoming.map((msg: any) => ({
+      id:         Number(msg.id),
+      from_id:    Number(msg.from_id),
+      from_dni:   msg.from_dni,
+      from_role:  msg.from_role,
+      to_id:      Number(msg.to_id),
+      to_dni:     msg.to_dni,
+      to_role:    msg.to_role,
+      content:    msg.content,
+      timestamp:  msg.timestamp,
+      is_read:    Boolean(msg.is_read)
+    }));
+
+    console.log('📬 [TutorPanel] mensajes normalizados:', normalized);
+    setMessages(normalized);
+  } catch (error) {
+    console.error('❌ [TutorPanel] Error al enviar o refrescar mensajes:', error);
+    toast.error('No se pudo enviar el mensaje');
+  }
+};
+
+
+
+  // ─── 9) Calificar voluntario ────────────────────────────────────────────────────────────────────────────────
   const handleRateVolunteer = async (
     studentId: number,
-  volunteerId: number,
+    volunteerId: number,
     rating: number,
     feedback: string
   ) => {
     const token = localStorage.getItem('token');
-    // Buscamos al voluntario por email directamente:
-const volunteer = volunteers.find(v => v.id === volunteerId);
-
+    const volunteer = volunteers.find((v) => v.id === volunteerId);
     const volunteer_id = volunteer?.id;
     const tutorDni = user?.dni;
     const score = rating;
-    console.log('🎯 [TutorPanel] Intentando calificar voluntario...', {
-      studentId,
-      volunteer_id,
-      score,
-      tutorDni
-    });
 
-if (!volunteerId || !tutorDni || !score) {
-  console.error('Faltan datos…');
-  toast.error('No se pudo registrar la calificación. Faltan datos.');
-  return;
-}
+    if (!volunteerId || !tutorDni || !score) {
+      toast.error('No se pudo registrar la calificación. Faltan datos.');
+      return;
+    }
 
     try {
       await axios.post(
@@ -468,7 +523,7 @@ if (!volunteerId || !tutorDni || !score) {
     }
   };
 
-  // 10) Actualizar ficha médica
+  // ─── 10) Actualizar ficha médica ─────────────────────────────────────────────────────────────────────────────
   const handleUpdateMedicalRecord = async (record: any) => {
     if (!selectedAlumno) return;
     const token = localStorage.getItem('token');
@@ -499,7 +554,7 @@ if (!volunteerId || !tutorDni || !score) {
                 observations: record.observaciones,
                 bloodType: record.grupoSanguineo || '',
                 emergencyContactName: record.contactoEmergencia.nombre,
-emergencyContactPhone: record.contactoEmergencia.telefono,
+                emergencyContactPhone: record.contactoEmergencia.telefono,
                 emergencyContactRelation: record.contactoEmergencia.relacion,
                 lastUpdate: new Date().toISOString().split('T')[0]
               }
@@ -550,7 +605,9 @@ emergencyContactPhone: record.contactoEmergencia.telefono,
             >
               <User
                 className={`-ml-0.5 mr-2 h-5 w-5 ${
-                  activeTab === 'overview' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'
+                  activeTab === 'overview'
+                    ? 'text-indigo-500'
+                    : 'text-gray-400 group-hover:text-gray-500'
                 }`}
               />
               Vista General
@@ -565,7 +622,9 @@ emergencyContactPhone: record.contactoEmergencia.telefono,
             >
               <MessageSquare
                 className={`-ml-0.5 mr-2 h-5 w-5 ${
-                  activeTab === 'messages' ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'
+                  activeTab === 'messages'
+                    ? 'text-indigo-500'
+                    : 'text-gray-400 group-hover:text-gray-500'
                 }`}
               />
               Mensajes
@@ -577,7 +636,10 @@ emergencyContactPhone: record.contactoEmergencia.telefono,
           <div className="space-y-4 mb-6">
             <h2 className="text-lg font-semibold text-gray-900">📢 Comunicados</h2>
             {announcements.map((a) => (
-              <div key={a.id} className="bg-blue-50 border-l-4 border-blue-500 p-4 shadow rounded-lg">
+              <div
+                key={a.id}
+                className="bg-blue-50 border-l-4 border-blue-500 p-4 shadow rounded-lg"
+              >
                 <h4 className="text-md font-semibold text-blue-800">{a.subject}</h4>
                 <p className="text-sm text-gray-700 mt-1">{a.content}</p>
                 <p className="text-xs text-gray-500 mt-2">
@@ -595,12 +657,16 @@ emergencyContactPhone: record.contactoEmergencia.telefono,
                 <div className="px-4 py-5 sm:px-6">
                   <div className="flex justify-between items-center">
                     <div>
-                      <h3 className="text-lg leading-6 font-medium text-gray-900">{alumno.nombre}</h3>
+                      <h3 className="text-lg leading-6 font-medium text-gray-900">
+                        {alumno.nombre}
+                      </h3>
                       <div className="mt-1 space-y-1">
                         <p className="text-sm text-gray-500">
                           Disciplina: {alumno.discipline || 'Sin asignación'}
                         </p>
-                        <p className="text-sm text-gray-500">Grupo: {alumno.groupNames || 'Sin asignación'}</p>
+                        <p className="text-sm text-gray-500">
+                          Grupo: {alumno.groupNames || 'Sin asignación'}
+                        </p>
                       </div>
                     </div>
                     <div className="flex space-x-4">
@@ -613,8 +679,7 @@ emergencyContactPhone: record.contactoEmergencia.telefono,
                         }}
                         className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                       >
-                        <FileText className="h-4 w-4 mr-2 text-gray-500" />
-                        Ficha Médica
+                        <FileText className="h-4 w-4 mr-2 text-gray-500" /> Ficha Médica
                       </button>
                       <button
                         onClick={() => {
@@ -625,8 +690,7 @@ emergencyContactPhone: record.contactoEmergencia.telefono,
                         }}
                         className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                       >
-                        <TrendingUp className="h-4 w-4 mr-2 text-gray-500" />
-                        Ver Progreso
+                        <TrendingUp className="h-4 w-4 mr-2 text-gray-500" /> Ver Progreso
                       </button>
                       <button
                         onClick={() => {
@@ -637,8 +701,7 @@ emergencyContactPhone: record.contactoEmergencia.telefono,
                         }}
                         className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                       >
-                        <Star className="h-4 w-4 mr-2 text-gray-500" />
-                        Calificar Voluntarios
+                        <Star className="h-4 w-4 mr-2 text-gray-500" /> Calificar Voluntarios
                       </button>
                     </div>
                   </div>
@@ -657,30 +720,37 @@ emergencyContactPhone: record.contactoEmergencia.telefono,
 
                 {selectedAlumno?.id === alumno.id && showRatingForm && (
                   <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
-<VolunteerRatingForm
-  volunteers={volunteersAsignados}
-  tutorId={tutorIdReal!}
-  onCancel={() => setShowRatingForm(false)}
-  onRate={(volunteerId, rating, feedback) =>
-    handleRateVolunteer(alumno.id, volunteerId, rating, feedback)
-  }
-/>
-
+                    <VolunteerRatingForm
+                      volunteers={volunteersAsignados}
+                      tutorId={tutorIdReal!}
+                      onCancel={() => setShowRatingForm(false)}
+                      onRate={(volunteerId, rating, feedback) =>
+                        handleRateVolunteer(alumno.id, volunteerId, rating, feedback)
+                      }
+                    />
                   </div>
                 )}
               </div>
             ))}
           </div>
         ) : (
-          <MessagingPanel
-            currentUser={user!}
-            contacts={contacts}
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            selectedContact={selectedContact}
-            onSelectContact={setSelectedContact}
-            loadingContacts={contacts.length === 0}
-          />
+          user && (
+            <MessagingPanel
+              currentUser={{
+                id: user.id,
+                dni: user.dni,
+                name: user.name,
+                email: user.email,
+                role: user.role
+              }}
+              contacts={contacts}
+              messages={messages}
+              onSendMessage={handleSendMessage}
+              selectedContact={selectedContact}
+              onSelectContact={setSelectedContact}
+              loadingContacts={contacts.length === 0}
+            />
+          )
         )}
       </div>
 
