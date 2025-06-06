@@ -380,29 +380,49 @@ export default function TutorPanel() {
     : [];
 
   // ─── 6) Marcamos mensajes como leídos ──────────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const marcarComoLeidos = async () => {
-      if (!selectedContact || !user) return;
-      try {
-        await fetch(
-          `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/messages/mark-as-read`,
-          {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to_id: user.id,
-              to_role: user.role,
-              from_id: selectedContact.id,
-              from_role: selectedContact.role
-            })
+  // ─── 6) Marcamos mensajes como leídos ──────────────────────────────────────────────────────────────────────────
+useEffect(() => {
+  const marcarComoLeidos = async () => {
+    if (!selectedContact || !user) return;
+
+    try {
+      // 1) Llamada al backend para marcar como leídos
+      await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/messages/mark-as-read`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to_id: user.id,
+            to_role: user.role,
+            from_id: selectedContact.id,
+            from_role: selectedContact.role
+          })
+        }
+      );
+
+      // 2) Ahora actualizamos localmente el estado 'messages', marcando como is_read=true
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (
+            msg.from_dni === selectedContact.dni &&
+            msg.from_role === selectedContact.role &&
+            msg.to_dni === user.dni &&
+            msg.to_role === user.role
+          ) {
+            return { ...msg, is_read: true };
           }
-        );
-      } catch (err) {
-        console.error('❌ [MessagingPanel] Error al marcar como leídos:', err);
-      }
-    };
-    marcarComoLeidos();
-  }, [selectedContact, user]);
+          return msg;
+        })
+      );
+    } catch (err) {
+      console.error('❌ [MessagingPanel] Error al marcar como leídos:', err);
+    }
+  };
+
+  marcarComoLeidos();
+}, [selectedContact, user]);
+
 
   // ─── 7) Efecto de debugging general ───────────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -418,72 +438,66 @@ export default function TutorPanel() {
   }, [user, contacts, messages, selectedContact, activeTab, tutorIdReal, myStudents, announcements]);
 
   // ─── 8) Envío de nuevo mensaje ────────────────────────────────────────────────────────────────────────────────
-// ─── TutorPanel.tsx ───
-// Reemplaza tu handleSendMessage por este:
+  const handleSendMessage = async (message: {
+    from_id: number;
+    from_dni: string;
+    from_role: 'tutor' | 'voluntario';
+    to_id: number;
+    to_dni: string;
+    to_role: 'tutor' | 'voluntario';
+    content: string;
+  }) => {
+    console.log('📤 [TutorPanel] Enviando mensaje:', message);
+    const token = localStorage.getItem('token');
 
-const handleSendMessage = async (message: {
-  from_id: number;
-  from_dni: string;
-  from_role: 'tutor' | 'voluntario';
-  to_id: number;
-  to_dni: string;
-  to_role: 'tutor' | 'voluntario';
-  content: string;
-}) => {
-  console.log('📤 [TutorPanel] Enviando mensaje:', message);
-  const token = localStorage.getItem('token');
+    try {
+      // 1) Insertar el mensaje
+      await axios.post(`${API_URL}/api/messages`, message, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-  try {
-    // 1) Insertar el mensaje
-    await axios.post(`${API_URL}/api/messages`, message, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    toast.success('✅ Mensaje enviado');
-
-    // 2) GET con parámetro “cache buster”
-    const messagesRes = await axios.get<{ success: boolean; data: any[] }>(
-      `${API_URL}/api/messages`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        params: {
-          user_dni: user?.dni,
-          user_role: user?.role,
-          _: Date.now()
+      // 2) GET con parámetro “cache buster”
+      const messagesRes = await axios.get<{ success: boolean; data: any[] }>(
+        `${API_URL}/api/messages`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: {
+            user_dni: user?.dni,
+            user_role: user?.role,
+            _: Date.now()
+          }
         }
-      }
-    );
+      );
 
-    // **Aquí** imprimimos **exactamente** lo que devuelve la API:
-    console.log('🛰️ [TutorPanel] Respuesta GET /api/messages ➤', messagesRes.data);
+      // **Aquí** imprimimos **exactamente** lo que devuelve la API:
+      console.log('🛰️ [TutorPanel] Respuesta GET /api/messages ➤', messagesRes.data);
 
-    const incoming = Array.isArray(messagesRes.data.data)
-      ? messagesRes.data.data
-      : [];
+      const incoming = Array.isArray(messagesRes.data.data)
+        ? messagesRes.data.data
+        : [];
 
-    console.log('📨 [TutorPanel] incoming.msgs:', incoming);
+      console.log('📨 [TutorPanel] incoming.msgs:', incoming);
 
-    const normalized: Message[] = incoming.map((msg: any) => ({
-      id:         Number(msg.id),
-      from_id:    Number(msg.from_id),
-      from_dni:   msg.from_dni,
-      from_role:  msg.from_role,
-      to_id:      Number(msg.to_id),
-      to_dni:     msg.to_dni,
-      to_role:    msg.to_role,
-      content:    msg.content,
-      timestamp:  msg.timestamp,
-      is_read:    Boolean(msg.is_read)
-    }));
+      const normalized: Message[] = incoming.map((msg: any) => ({
+        id:         Number(msg.id),
+        from_id:    Number(msg.from_id),
+        from_dni:   msg.from_dni,
+        from_role:  msg.from_role,
+        to_id:      Number(msg.to_id),
+        to_dni:     msg.to_dni,
+        to_role:    msg.to_role,
+        content:    msg.content,
+        timestamp:  msg.timestamp,
+        is_read:    Boolean(msg.is_read)
+      }));
 
-    console.log('📬 [TutorPanel] mensajes normalizados:', normalized);
-    setMessages(normalized);
-  } catch (error) {
-    console.error('❌ [TutorPanel] Error al enviar o refrescar mensajes:', error);
-    toast.error('No se pudo enviar el mensaje');
-  }
-};
-
-
+      console.log('📬 [TutorPanel] mensajes normalizados:', normalized);
+      setMessages(normalized);
+    } catch (error) {
+      console.error('❌ [TutorPanel] Error al enviar o refrescar mensajes:', error);
+      toast.error('No se pudo enviar el mensaje');
+    }
+  };
 
   // ─── 9) Calificar voluntario ────────────────────────────────────────────────────────────────────────────────
   const handleRateVolunteer = async (
@@ -570,6 +584,18 @@ const handleSendMessage = async (message: {
     }
   };
 
+  // ─── Mensajes sin leer de voluntarios ───────────────────────────────────────────────────────────────────────
+  const unreadVolunteers = contacts.filter((contact) =>
+    messages.some(
+      (msg) =>
+        msg.from_dni === contact.dni &&
+        msg.from_role === 'voluntario' &&
+        msg.to_dni === user?.dni &&
+        msg.to_role === user?.role &&
+        !msg.is_read
+    )
+  );
+
   return (
     <div className="min-h-screen bg-gray-100">
       <nav className="bg-white shadow-sm">
@@ -591,6 +617,18 @@ const handleSendMessage = async (message: {
           </div>
         </div>
       </nav>
+
+      {/* ─── Notificación de mensajes sin leer ───────────────────────────────────────────────────────────────────── */}
+      {unreadVolunteers.length > 0 && (
+        <div className="max-w-7xl mx-auto mt-4 px-4 sm:px-6 lg:px-8">
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+            <p className="text-sm text-yellow-700">
+              Tienes mensajes sin leer de:{' '}
+              {unreadVolunteers.map((v) => v.name).join(', ')}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="border-b border-gray-200 mb-6">

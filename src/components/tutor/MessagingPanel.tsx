@@ -1,6 +1,6 @@
 // src/components/tutor/MessagingPanel.tsx
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Send, User, Clock } from 'lucide-react'
 
 interface Message {
@@ -24,8 +24,6 @@ interface Contact {
   role: 'tutor' | 'voluntario'
   studentName?: string
   groupName?: string
-  lastMessage?: string
-  unreadCount?: number
 }
 
 interface MessagingPanelProps {
@@ -64,11 +62,28 @@ export default function MessagingPanel({
   const [newMessage, setNewMessage] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [localMessages, setLocalMessages] = useState<Message[]>(messages)
+  const chatContainerRef = useRef<HTMLDivElement | null>(null)
 
+  // Mantener sincronizados los mensajes locales
   useEffect(() => {
     setLocalMessages(messages)
   }, [messages])
 
+  // Calcular conteo de mensajes no leídos por contacto
+  const unreadCounts: Record<number, number> = {}
+  contacts.forEach((contact) => {
+    const count = messages.filter(
+      (msg) =>
+        msg.from_dni === contact.dni &&
+        msg.from_role === contact.role &&
+        msg.to_dni === currentUser.dni &&
+        msg.to_role === currentUser.role &&
+        !msg.is_read
+    ).length
+    unreadCounts[contact.id] = count
+  })
+
+  // Marcar mensajes como leídos al cambiar de contacto
   useEffect(() => {
     const marcarComoLeidos = async () => {
       if (!selectedContact || !currentUser) return
@@ -95,9 +110,14 @@ export default function MessagingPanel({
     marcarComoLeidos()
   }, [selectedContact, currentUser])
 
+  // Auto-scroll al final de la conversación cuando cambian mensajes o contacto
   useEffect(() => {
-    const chatArea = document.querySelector('.overflow-y-auto')
-    chatArea?.scrollTo({ top: chatArea.scrollHeight, behavior: 'smooth' })
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      })
+    }
   }, [selectedContact, localMessages])
 
   const filteredContacts = searchTerm.trim()
@@ -112,29 +132,28 @@ export default function MessagingPanel({
 
   // Filtrar mensajes por DNI
   const getMessagesForChatByDni = (
-  msgs: Message[],
-  userDni: string,
-  userRole: 'tutor' | 'voluntario',
-  contactDni: string,
-  contactRole: 'tutor' | 'voluntario'
-): Message[] => {
-  return msgs.filter((msg) => {
-    const matchFrom =
-      msg.from_dni === userDni &&
-      msg.from_role === userRole &&
-      msg.to_dni === contactDni &&
-      msg.to_role === contactRole
+    msgs: Message[],
+    userDni: string,
+    userRole: 'tutor' | 'voluntario',
+    contactDni: string,
+    contactRole: 'tutor' | 'voluntario'
+  ): Message[] => {
+    return msgs.filter((msg) => {
+      const matchFrom =
+        msg.from_dni === userDni &&
+        msg.from_role === userRole &&
+        msg.to_dni === contactDni &&
+        msg.to_role === contactRole
 
-    const matchTo =
-      msg.from_dni === contactDni &&
-      msg.from_role === contactRole &&
-      msg.to_dni === userDni &&
-      msg.to_role === userRole
+      const matchTo =
+        msg.from_dni === contactDni &&
+        msg.from_role === contactRole &&
+        msg.to_dni === userDni &&
+        msg.to_role === userRole
 
-    return matchFrom || matchTo
-  })
-}
-
+      return matchFrom || matchTo
+    })
+  }
 
   const currentChat = selectedContact
     ? getMessagesForChatByDni(
@@ -196,7 +215,7 @@ export default function MessagingPanel({
             <div
               key={contact.id}
               onClick={() => onSelectContact(contact)}
-              className={`p-4 cursor-pointer hover:bg-gray-50 ${
+              className={`p-4 cursor-pointer hover:bg-gray-50 rounded-lg flex items-center justify-between ${
                 selectedContact?.id === contact.id ? 'bg-indigo-50' : ''
               }`}
             >
@@ -211,18 +230,13 @@ export default function MessagingPanel({
                     {contact.studentName && ` - ${contact.studentName}`}
                     {contact.groupName && ` (${contact.groupName})`}
                   </p>
-                  {contact.lastMessage && (
-                    <p className="text-xs text-gray-500 truncate mt-1">
-                      {contact.lastMessage}
-                    </p>
-                  )}
                 </div>
-                {contact.unreadCount && contact.unreadCount > 0 && (
-                  <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-indigo-600 text-white text-xs">
-                    {contact.unreadCount}
-                  </span>
-                )}
               </div>
+              {unreadCounts[contact.id] > 0 && (
+                <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-indigo-600 text-white text-xs">
+                  {unreadCounts[contact.id]}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -245,9 +259,12 @@ export default function MessagingPanel({
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div
+              ref={chatContainerRef}
+              className="flex-1 overflow-y-auto p-4 space-y-4"
+            >
               {currentChat.map((message) => {
-                // Ahora comparamos DNIs para saber si es mensaje propio
+                // Comparar DNIs para saber si es mensaje propio
                 const isOwn =
                   message.from_dni === currentUser.dni &&
                   message.from_role === currentUser.role
@@ -275,12 +292,10 @@ export default function MessagingPanel({
                   </div>
                 )
               })}
+              <div />
             </div>
 
-            <form
-              onSubmit={handleSendMessage}
-              className="p-4 border-t border-gray-200"
-            >
+            <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200">
               <div className="flex space-x-4">
                 <input
                   type="text"

@@ -96,9 +96,8 @@ export default function VoluntarioPanel() {
   const [selectedContact, setSelectedContact] = useState<any>(null);
 
   useEffect(() => {
-  console.log('🟢 VoluntarioPanel: selectedContact cambió =>', selectedContact);
-}, [selectedContact]);
-
+    console.log('🟢 VoluntarioPanel: selectedContact cambió =>', selectedContact);
+  }, [selectedContact]);
 
   // 1. Cargo grupos, alumnos y anuncios al montar el componente
   useEffect(() => {
@@ -144,57 +143,57 @@ export default function VoluntarioPanel() {
   }, []);
 
   // 2. Cargo contactos (tutores) cuando tengo el usuario
-  // 2. Cargo contactos (tutores) cuando tengo el usuario
-// 2. Cargo contactos (tutores) cuando tengo el usuario
-useEffect(() => {
-  const fetchContacts = async () => {
-    try {
-      const res = await axios.get(
-        `${API_URL}/api/contacts/voluntario-dni/${user.dni}`
-      );
-res.data.data.forEach((tutor: any) => {
-  console.log('RAW tutor completo:', JSON.stringify(tutor));
-});
+  useEffect(() => {
+    const fetchContacts = async () => {
+      try {
+        const res = await axios.get(
+          `${API_URL}/api/contacts/voluntario-dni/${user.dni}`
+        );
+        res.data.data.forEach((tutor: any) => {
+          console.log('RAW tutor completo:', JSON.stringify(tutor));
+        });
 
-      // Mapeo para asegurar que cada “contact” tenga su “dni”:
-      // — Si el backend ya devuelve “dni” en cada tutor, usalo directamente (tutor.dni).
-      // — Si viene con otro nombre (por ej. tutorDni), adaptá la línea a tutor.tutorDni.
-const contactosConDni = res.data.data.map((tutor: any) => ({
-  id:          tutor.userId,     // ← aquí uso userId (el ID de users2) para que coincida con messages.from_id/to_id
-  dni:         tutor.tutorDni,
-  name:        tutor.name,
-  email:       tutor.email,
-  role:        'tutor' as const,
-  studentName: tutor.studentName,
-  groupName:   tutor.groupName
-}));
+        // Mapeo para asegurar que cada “contact” tenga su “dni”:
+        const contactosConDni = res.data.data.map((tutor: any) => ({
+          id:          tutor.userId,     // Asegurá que coincide con el ID de la tabla users
+          dni:         tutor.tutorDni,  // O ajustá a tutor.dni si así lo devuelve el backend
+          name:        tutor.name,
+          email:       tutor.email,
+          role:        'tutor' as const,
+          studentName: tutor.studentName,
+          groupName:   tutor.groupName
+        }));
 
+        console.log('📬 Contactos mapeados (con dni):', contactosConDni);
+        setContacts(contactosConDni);
+      } catch (err) {
+        console.error(
+          '❌ Error al obtener contactos reales en VoluntarioPanel:',
+          err
+        );
+      }
+    };
 
-      console.log('📬 Contactos mapeados (con dni):', contactosConDni);
-      setContacts(contactosConDni);
-    } catch (err) {
-      console.error(
-        '❌ Error al obtener contactos reales en VoluntarioPanel:',
-        err
-      );
+    if (user.role === 'voluntario') {
+      fetchContacts();
     }
-  };
+  }, [user]);
 
-  if (user.role === 'voluntario') {
-    fetchContacts();
-  }
-}, [user]);
+  // Inicializar selectedContact si aún es null y ya cargaron los contactos
+  useEffect(() => {
+    if (!selectedContact && contacts.length > 0) {
+      setSelectedContact(contacts[0]);
+    }
+  }, [contacts, selectedContact]);
 
-
-
-  // 3. Cargo mensajes cuando cambio a la pestaña “messages” — ahora filtrando por DNI
+  // 3. Cargo mensajes cuando cambio a la pestaña “messages” — filtrando por DNI
   useEffect(() => {
     const fetchMessages = async () => {
       const token = localStorage.getItem('token');
       try {
         const res = await axios.get(`${API_URL}/api/messages`, {
           params: {
-            user_dni: user?.dni,     // Cambio a user_dni
+            user_dni: user?.dni,
             user_role: user?.role
           },
           headers: { Authorization: `Bearer ${token}` }
@@ -229,40 +228,38 @@ const contactosConDni = res.data.data.map((tutor: any) => ({
     }
   }, [activeTab, user]);
 
-  // 4. Función para enviar un nuevo mensaje (agregar también DNI aquí)
- const handleSendMessage = async (message: any) => {
-  const token = localStorage.getItem('token');
+  // 4. Función para enviar un nuevo mensaje (agregar también DNI y IDs aquí)
+  const handleSendMessage = async (message: any) => {
+    const token = localStorage.getItem('token');
 
-  const adaptedMessage = {
-    from_dni:  user.dni,
-    from_role: user.role,
-    to_dni:    message.to_dni,
-    to_role:   message.to_role,
-    content:   message.content
-  };
+    const adaptedMessage = {
+      from_id:   user.id,
+      from_dni:  user.dni,
+      from_role: user.role,
+      to_id:     message.to_id,    // Debe venir de selectedContact.id
+      to_dni:    message.to_dni,
+      to_role:   message.to_role,
+      content:   message.content
+    };
 
-  // ───> LOG A: payload exacto a enviar
-  console.log('➡️ Payload a enviar a /api/messages:', adaptedMessage);
+    console.log('➡️ Payload a enviar a /api/messages:', adaptedMessage);
 
-  try {
-    const res = await axios.post(
-      `${API_URL}/api/messages`,
-      adaptedMessage,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    console.log('✅ Mensaje enviado, respuesta del servidor:', res.data.data);
-    setMessages((prev: any[]) => [...prev, res.data.data]);
-  } catch (err: any) {
-    // ───> LOG B: cuerpo del error 400
-    if (err.response) {
-      console.error('❌ Error 400 del servidor – body:', err.response.data);
-    } else {
-      console.error('❌ Error desconocido al enviar mensaje:', err);
+    try {
+      const res = await axios.post(
+        `${API_URL}/api/messages`,
+        adaptedMessage,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      console.log('✅ Mensaje enviado, respuesta del servidor:', res.data.data);
+      setMessages((prev: any[]) => [...prev, res.data.data]);
+    } catch (err: any) {
+      if (err.response) {
+        console.error('❌ Error 400 del servidor – body:', err.response.data);
+      } else {
+        console.error('❌ Error desconocido al enviar mensaje:', err);
+      }
     }
-  }
-};
-
-
+  };
 
   // 5. Lógica para filtrar grupos asignados al voluntario actual
   const volunteerDni = user?.dni?.trim();
@@ -392,6 +389,27 @@ const contactosConDni = res.data.data.map((tutor: any) => ({
             </nav>
           </div>
 
+          {/*
+            RENDERIZAMOS PRIMERO LOS COMUNICADOS SI ESTAMOS EN “overview”
+          */}
+          {activeTab === 'overview' && announcements.length > 0 && (
+            <div className="space-y-4 mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">📢 Comunicados</h2>
+              {announcements.map((a: any) => (
+                <div
+                  key={a.id}
+                  className="bg-blue-50 border-l-4 border-blue-500 p-4 shadow rounded-lg"
+                >
+                  <h4 className="text-md font-semibold text-blue-800">{a.subject}</h4>
+                  <p className="text-sm text-gray-700 mt-1">{a.content}</p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    📅 Publicado: {new Date(a.publication_date).toLocaleDateString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
           {activeTab === 'overview' ? (
             groupStudents.length === 0 ? (
               <div className="text-center text-gray-500 mt-10">
@@ -485,7 +503,7 @@ const contactosConDni = res.data.data.map((tutor: any) => ({
         {showRatingForm && selectedAlumno && (
           <ProgressForm
             student={selectedAlumno}
-            groupId={selectedAlumno.groupId}
+            groupId={selectedAlumno.groupId!}
             onCancel={() => {
               setShowRatingForm(false);
               setSelectedAlumno(null);

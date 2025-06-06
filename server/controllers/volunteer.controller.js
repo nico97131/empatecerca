@@ -1,6 +1,6 @@
 import db from '../config/db.js';
 
-// 🔧 Función auxiliar para crear usuario desde voluntario
+// 🔧 Función auxiliar para crear usuario desde voluntario (ahora en users2)
 async function createUserFromVolunteer(volunteer) {
   const nombreNormalizado = `${volunteer.first_name} ${volunteer.last_name}`
     .toLowerCase()
@@ -11,13 +11,29 @@ async function createUserFromVolunteer(volunteer) {
 
   const email = `${nombreNormalizado}@empate.org`;
 
-  await db.query(
-    `INSERT INTO users (name, email, dni, password, role, status)
-     VALUES (?, ?, ?, ?, 'voluntario', 'active')`,
-    [`${volunteer.first_name} ${volunteer.last_name}`, email, volunteer.dni, volunteer.dni]
+  // Verificar si ya existe en users2 como voluntario
+  const [existing] = await db.query(
+    `SELECT volunteer_id AS id FROM users2 WHERE dni = ? AND volunteer_id IS NOT NULL`,
+    [volunteer.dni]
   );
+  if (existing.length > 0) {
+    console.log('⚠️ Ya existe un usuario-voluntario con este DNI en users2. No se crea otro.');
+    return;
+  }
 
-  console.log(`✅ Usuario creado automáticamente para voluntario con email ${email}`);
+await db.query(
+  `INSERT INTO users2 (volunteer_id, name, email, dni, password, role, status)
+   VALUES (?, ?, ?, ?, ?, 'voluntario', 'active')`,
+  [ volunteer.id,
+    `${volunteer.first_name} ${volunteer.last_name}`,
+    email,
+    volunteer.dni,
+    volunteer.dni
+  ]
+);
+
+
+  console.log(`✅ Usuario creado automáticamente en users2 para voluntario con email ${email}`);
 }
 
 // @desc Get all volunteers
@@ -49,24 +65,20 @@ export const getVolunteers = async (req, res) => {
       );
       volunteer.availability = availabilityRows.map(r => r.slot);
 
-      // 👇 NUEVO: obtener los grupos asignados
       const [groupRows] = await db.query(
         'SELECT group_id FROM group_volunteers WHERE volunteer_id = ?',
         [volunteer.id]
       );
-      volunteer.groups = groupRows.map(g => g.group_id); // esto es lo que necesitás en el frontend
+      volunteer.groups = groupRows.map(g => g.group_id);
     }
 
     console.log(`✅ Se obtuvieron ${rows.length} voluntarios`);
     res.json({ success: true, count: rows.length, data: rows });
-
   } catch (error) {
     console.error('❌ [getVolunteers] Error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
-
 
 // @desc Get single volunteer
 // @route GET /api/volunteers/:id
@@ -89,8 +101,6 @@ export const getVolunteer = async (req, res) => {
 
 // @desc Create volunteer
 // @route POST /api/volunteers
-// @desc Create volunteer
-// @route POST /api/volunteers
 export const createVolunteer = async (req, res) => {
   console.log('📥 POST /api/volunteers');
   console.log('📝 Datos recibidos:', req.body);
@@ -106,13 +116,15 @@ export const createVolunteer = async (req, res) => {
       join_date,
       status,
       inactive_reason,
-      availability,
-      groups = [] // 👈 nuevo campo
+      availability = [],
+      groups = []
     } = req.body;
 
     const name = `${first_name} ${last_name}`.trim();
 
-    const [existingEmail] = await db.query('SELECT id FROM volunteers WHERE email = ?', [email]);
+    const [existingEmail] = await db.query(
+      'SELECT id FROM volunteers WHERE email = ?', [email]
+    );
     if (existingEmail.length > 0) {
       return res.status(400).json({
         success: false,
@@ -120,7 +132,9 @@ export const createVolunteer = async (req, res) => {
       });
     }
 
-    const [existingDNI] = await db.query('SELECT id FROM volunteers WHERE dni = ?', [dni]);
+    const [existingDNI] = await db.query(
+      'SELECT id FROM volunteers WHERE dni = ?', [dni]
+    );
     if (existingDNI.length > 0) {
       return res.status(400).json({
         success: false,
@@ -130,7 +144,7 @@ export const createVolunteer = async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO volunteers
-       (first_name, last_name, email, phone, dni, discipline_id, join_date, status, inactive_reason)
+         (first_name, last_name, email, phone, dni, discipline_id, join_date, status, inactive_reason)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         first_name,
@@ -152,27 +166,32 @@ export const createVolunteer = async (req, res) => {
       await createUserFromVolunteer({ first_name, last_name, dni });
     }
 
-    if (availability && Array.isArray(availability)) {
+    if (Array.isArray(availability) && availability.length > 0) {
       const values = availability.map(slot => [volunteerId, slot]);
       await db.query(
         'INSERT INTO volunteer_availability (volunteer_id, slot) VALUES ?',
         [values]
       );
       console.log(`📆 Disponibilidad insertada para voluntario ${volunteerId}`);
+    } else {
+      console.log('ℹ️ No hay disponibilidad para insertar (array vacío o indefinido)');
     }
 
-    // 🔥 NUEVO: insertar grupos si vienen
     if (Array.isArray(groups) && groups.length > 0) {
       const groupValues = groups.map(groupId => [volunteerId, groupId]);
-      await db.query('INSERT INTO group_volunteers (volunteer_id, group_id) VALUES ?', [groupValues]);
+      await db.query(
+        'INSERT INTO group_volunteers (volunteer_id, group_id) VALUES ?',
+        [groupValues]
+      );
       console.log(`📌 Grupos asignados al crear voluntario ${volunteerId}:`, groups);
+    } else {
+      console.log('ℹ️ No hay grupos para asignar (array vacío o indefinido)');
     }
 
     res.status(201).json({
       success: true,
       data: { id: volunteerId, ...req.body, name }
     });
-
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
       let message = 'Ya existe un registro con el mismo valor único';
@@ -189,24 +208,24 @@ export const createVolunteer = async (req, res) => {
   }
 };
 
-
 // @desc Update volunteer
 // @route PUT /api/volunteers/:id
-// @desc Update volunteer
-// @route PUT /api/volunteers/:id
+// @desc Update volunteer (puede editar la tabla volunteers y/o la tabla volunteer_availability)
 export const updateVolunteer = async (req, res) => {
   console.log(`✏️ PUT /api/volunteers/${req.params.id}`);
   console.log('📝 Datos para actualizar:', req.body);
 
   try {
     const { id } = req.params;
-    const [existing] = await db.query('SELECT * FROM volunteers WHERE id = ?', [id]);
 
+    // 1) Verificar que el voluntario exista
+    const [existing] = await db.query('SELECT * FROM volunteers WHERE id = ?', [id]);
     if (existing.length === 0) {
       console.log('❌ Voluntario no encontrado');
       return res.status(404).json({ success: false, message: 'Volunteer not found' });
     }
 
+    // 2) Extraer campos de req.body
     const {
       first_name,
       last_name,
@@ -217,37 +236,11 @@ export const updateVolunteer = async (req, res) => {
       join_date,
       status,
       inactive_reason,
-      availability,
-      groups = [] // 👈 nuevo campo
+      availability = [],  // array de objetos { day, time_from, time_to } o array de strings si lo prefieres
+      groups = []         // array de IDs de grupos si quieres actualizar grupos
     } = req.body;
 
-    const name = `${first_name} ${last_name}`.trim();
-
-    const [emailCheck] = await db.query(
-      'SELECT id FROM volunteers WHERE email = ? AND id != ?',
-      [email, id]
-    );
-    if (emailCheck.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Ya existe un voluntario con ese correo electrónico'
-      });
-    }
-
-    const [dniCheck] = await db.query(
-      'SELECT id FROM volunteers WHERE dni = ? AND id != ?',
-      [dni, id]
-    );
-    if (dniCheck.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Ya existe un voluntario con ese DNI'
-      });
-    }
-
-    const fields = [];
-    const values = [];
-
+    // 3) Preparar UPDATE dinámico para la tabla 'volunteers'
     const dataToUpdate = {
       first_name,
       last_name,
@@ -257,61 +250,79 @@ export const updateVolunteer = async (req, res) => {
       discipline_id,
       join_date,
       status,
+      // Si status = 'inactive', usamos inactive_reason; si no, lo ponemos explícitamente a NULL
       inactive_reason: status === 'inactive' ? inactive_reason : null
     };
 
+    const fields = [];
+    const values = [];
     for (const [field, value] of Object.entries(dataToUpdate)) {
+      // Solo agregamos aquellos que NO sean undefined
       if (value !== undefined) {
         fields.push(`${field} = ?`);
         values.push(value);
       }
     }
 
-    if (fields.length === 0) {
-      return res.status(400).json({ success: false, message: 'No fields provided for update' });
+    // 4) Si fields.length > 0, hacemos el UPDATE en volunteers. Si no, lo saltamos.
+    if (fields.length > 0) {
+      values.push(id);
+      const updateQuery = `UPDATE volunteers SET ${fields.join(', ')} WHERE id = ?`;
+      await db.query(updateQuery, values);
+      console.log('✅ Voluntario actualizado correctamente (tabla volunteers)');
+    } else {
+      console.log('⚠️ No se recibieron campos para actualizar en volunteers, se salta esa parte.');
     }
 
-    const updateQuery = `UPDATE volunteers SET ${fields.join(', ')} WHERE id = ?`;
-    values.push(id);
-
-    await db.query(updateQuery, values);
-    console.log('✅ Voluntario actualizado correctamente');
-
+    // 5) Si status pasó a 'active', verificar creación en users2
     if (status === 'active') {
-      const [existingUser] = await db.query('SELECT id FROM users WHERE dni = ?', [dni]);
+      const [existingUser] = await db.query(
+        'SELECT volunteer_id AS id FROM users2 WHERE dni = ? AND volunteer_id IS NOT NULL',
+        [dni]
+      );
       if (existingUser.length === 0) {
+        // solo si no existe, creamos
         await createUserFromVolunteer({ first_name, last_name, dni });
       }
     }
 
-    if (availability && Array.isArray(availability)) {
-      await db.query('DELETE FROM volunteer_availability WHERE volunteer_id = ?', [id]);
+    // 6) Actualizar disponibilidad (volunteer_availability)
+    // Borramos todas las filas previas para este volunteer_id
+    await db.query('DELETE FROM volunteer_availability WHERE volunteer_id = ?', [id]);
+    console.log('🧹 Disponibilidad previa eliminada');
 
-      const values = availability.map(slot => [id, slot]);
-      if (values.length > 0) {
-        await db.query(
-          'INSERT INTO volunteer_availability (volunteer_id, slot) VALUES ?',
-          [values]
-        );
-        console.log(`📆 Disponibilidad actualizada para voluntario ${id}`);
-      }
+    // Si hay un array de availability, lo volvemos a insertar
+    // 👉 En este ejemplo asumimos que recibes un array de OBJETOS: { day, time_from, time_to }
+    if (Array.isArray(availability) && availability.length > 0) {
+      // Convertir a la forma [ [volunteer_id, day, time_from, time_to], ... ]
+      const insertValues = availability.map(a => [id, a.day, a.time_from, a.time_to]);
+      await db.query(
+        'INSERT INTO volunteer_availability (volunteer_id, day, time_from, time_to) VALUES ?',
+        [insertValues]
+      );
+      console.log(`📆 Disponibilidad actualizada para voluntario ${id}`);
+    } else {
+      console.log('ℹ️ No hay disponibilidad para insertar (array vacío o indefinido)');
     }
 
-    // 🔥 NUEVO: actualizar grupos
-    if (Array.isArray(groups)) {
-      await db.query('DELETE FROM group_volunteers WHERE volunteer_id = ?', [id]);
+    // 7) Actualizar grupos (group_volunteers)
+    // Borramos las filas previas
+    await db.query('DELETE FROM group_volunteers WHERE volunteer_id = ?', [id]);
+    console.log('🧹 Relaciones previas en group_volunteers eliminadas');
 
-      if (groups.length > 0) {
-        const values = groups.map(groupId => [id, groupId]);
-        await db.query('INSERT INTO group_volunteers (volunteer_id, group_id) VALUES ?', [values]);
-        console.log(`🔁 Grupos actualizados para voluntario ${id}:`, groups);
-      } else {
-        console.log(`📭 Voluntario ${id} quedó sin grupos asignados`);
-      }
+    if (Array.isArray(groups) && groups.length > 0) {
+      const groupValues = groups.map(groupId => [id, groupId]);
+      await db.query(
+        'INSERT INTO group_volunteers (volunteer_id, group_id) VALUES ?',
+        [groupValues]
+      );
+      console.log(`🔁 Grupos actualizados para voluntario ${id}:`, groups);
+    } else {
+      console.log('ℹ️ No hay grupos para asignar (array vacío o indefinido)');
     }
 
-    res.json({ success: true, message: 'Volunteer updated successfully' });
-
+    // 8) Devolver respuesta
+    res.json({ success: true, message: 'Volunteer (y disponibilidad) actualizados correctamente' });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
       let message = 'Ya existe un valor duplicado';
@@ -328,8 +339,6 @@ export const updateVolunteer = async (req, res) => {
   }
 };
 
-
-
 // @desc Delete volunteer
 // @route DELETE /api/volunteers/:id
 export const deleteVolunteer = async (req, res) => {
@@ -342,10 +351,7 @@ export const deleteVolunteer = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Volunteer not found' });
     }
 
-    // ✅ Eliminar relaciones antes
     await db.query('DELETE FROM group_volunteers WHERE volunteer_id = ?', [req.params.id]);
-
-    // ✅ Ahora eliminar el voluntario
     await db.query('DELETE FROM volunteers WHERE id = ?', [req.params.id]);
     console.log('✅ Voluntario eliminado correctamente');
 
@@ -355,7 +361,6 @@ export const deleteVolunteer = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
 
 // @desc Update availability
 // @route PUT /api/volunteers/:id/availability
@@ -407,7 +412,6 @@ export const getVolunteerGroups = async (req, res) => {
     );
 
     console.log(`✅ ${groups.length} grupo(s) encontrados para el voluntario ${req.params.id}`);
-
     res.json({ success: true, count: groups.length, data: groups });
   } catch (error) {
     console.error('❌ [getVolunteerGroups] Error:', error);
@@ -448,13 +452,14 @@ export const assignGroupsToVolunteer = async (req, res) => {
   }
 
   try {
-    // 1. Eliminar relaciones previas
     await db.query('DELETE FROM group_volunteers WHERE volunteer_id = ?', [volunteerId]);
 
-    // 2. Insertar nuevas relaciones si hay
     if (groupIds.length > 0) {
       const values = groupIds.map(groupId => [volunteerId, groupId]);
-      await db.query('INSERT INTO group_volunteers (volunteer_id, group_id) VALUES ?', [values]);
+      await db.query(
+        'INSERT INTO group_volunteers (volunteer_id, group_id) VALUES ?',
+        [values]
+      );
     }
 
     console.log('✅ Grupos asignados correctamente');
@@ -464,5 +469,3 @@ export const assignGroupsToVolunteer = async (req, res) => {
     res.status(500).json({ success: false, message: 'Error al asignar grupos' });
   }
 };
-
-
